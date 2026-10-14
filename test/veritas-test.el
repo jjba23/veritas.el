@@ -397,6 +397,9 @@
                  (buffer-string))))
     (should (string-match-p "Failures (1)" text))
     (should (string-match-p "a deliberately failing test" text))
+    ;; The path in front of a failure names its suites, not the failure again.
+    (should-not (string-match-p "a deliberately failing test › a deliberately failing test"
+                                text))
     (should (string-match-p "error, expect: 3, got: 2" text))
     (should (string-match-p "demo.scm" text))
     (should (string-match-p "1 failed" text))

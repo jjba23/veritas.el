@@ -104,7 +104,7 @@ json-reporter · unit · ~/project
 $ veritas --reporter json-reporter --test-type unit --test-module veritas --no-shuffle
 
 Failures (1)
-  ✘ Math Suite › a deliberately failing test › a deliberately failing test
+  ✘ Math Suite › a deliberately failing test
      error, expect: 3, got: 2  ~/project/test/veritas/unit/demo.scm:27
 
 Files
@@ -227,17 +227,28 @@ it is there.  Guile and Guix are needed only to actually run tests.
 
 * Development
 
+The tasks are run with [[https://codeberg.org/jjba23/maak][Maak]], the command runner of the sibling
+projects, so =maak --list= says what there is and =maak -- check= does the
+whole thing:
+
 #+begin_src sh
-make compile   # byte-compile
-make test      # ERT
-make check     # both
+maak --list       # what can be run
+maak -- check     # from a clean tree: byte-compile, then ERT
+maak -- compile   # byte-compile
+maak -- test      # ERT
+maak -- lint      # byte-compile with warnings as errors, then checkdoc
+maak -- repl      # an Emacs with the package loaded
+maak -- hr        # compile and test again on every change
 #+end_src
 
-Two of the tests run Veritas for real, against =test/fixture=, when
-=test/fixture= has a =bin/veritas= and Guix is installed; point
-=VERITAS_CHECKOUT= at a Veritas checkout to run its own =bin/veritas= instead.
-The rest run against a recorded stream in =test/data/= and a source fixture in
-=test/veritas-test.el=, so they work without Guile.
+=EMACS= chooses the Emacs the tasks use, defaulting to =emacs= on =PATH=.
+
+Two of the tests run a real Veritas against =test/fixture=: they use the
+=bin/veritas= of the checkout named by =VERITAS_CHECKOUT= (=~/Hacking/veritas=
+by default), wrapped in =guix shell=, and skip themselves when Guix or that
+checkout is not there.  The rest run against a recorded stream in =test/data/=
+and a source fixture in =test/veritas-test.el=, so they need neither Guile nor a
+network.
 
 * Licence
 

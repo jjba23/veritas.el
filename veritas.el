@@ -514,9 +514,9 @@
                       (raw (buffer-substring-no-properties start (point))))
                  (condition-case nil (read raw) (error raw))))
       (error nil)))
-   ((looking-at "[^ \11\n()\"]")
+   ((looking-at "[^ \t\n()\"]")
     (let ((start (point)))
-      (skip-chars-forward "^ \11\n()\"" limit)
+      (skip-chars-forward "^ \t\n()\"" limit)
       (buffer-substring-no-properties start (point))))
    (t nil)))
 
@@ -526,19 +526,19 @@
     (goto-char start)
     ;; Skip the opening paren and the head symbol.
     (forward-char 1)
-    (skip-chars-forward "^ \11\n()" end)
+    (skip-chars-forward "^ \t\n()" end)
     (catch 'name
       ;; The walk is bounded and every step has to make progress, so that a
       ;; malformed form can never turn the scan into a loop.
       (let ((budget 10000))
         (while (and (< (point) end) (> (setq budget (1- budget)) 0))
-          (skip-chars-forward " \11\n" end)
+          (skip-chars-forward " \t\n" end)
           (cond
            ((>= (point) end) (throw 'name nil))
            ((looking-at "#:\\([[:alnum:]?!*<>=+/-]+\\)")
             (let ((key (match-string-no-properties 1)))
               (goto-char (match-end 0))
-              (skip-chars-forward " \11\n" end)
+              (skip-chars-forward " \t\n" end)
               (if (string-equal key "name")
                   (throw 'name (veritas--read-name end))
                 ;; Skip the value that belongs to this keyword.
@@ -577,8 +577,11 @@
                        ;; about, which would restart the search forever.
                        :depth (save-excursion
                                 (car (syntax-ppss form-start)))
+                       ;; The `?' is the Emacs regexp repetition operator, so a
+                       ;; literal one has to be escaped: `#:skip?' is a
+                       ;; keyword, not "skip" with an optional `p'.
                        :skip (and body
-                                  (string-match-p "#:skip?[ \11\n]+#t" body)
+                                  (string-match-p "#:skip\\?[ \t\n]+#t" body)
                                   t)
                        :file file)
                       definitions)))))))
@@ -709,6 +712,48 @@
       (push node path)
       (setq node (veritas-node-parent node)))
     path))
+
+;;; Querying the definitions
+;;
+;; These are the names to build on: a key binding, a completion table or a
+;; project command of your own can ask what a buffer declares without knowing
+;; how the scan works.
+
+(defun veritas-nodes (&optional source)
+  "Return every definition of SOURCE, outermost first.\n\nSOURCE defaults to what this buffer declares, rescanned when it changed."
+  (veritas--all-nodes (or source (veritas--buffer-source))))
+
+(defun veritas-node-at-point (&optional point)
+  "Return the innermost definition containing POINT, by default point."
+  (veritas--node-at-point point))
+
+(defun veritas-enclosing-nodes (&optional point)
+  "Return the definitions containing POINT, innermost first."
+  (veritas--enclosing-nodes (or point (point))))
+
+(defun veritas-node-path (node)
+  "Return NODE and its ancestors, outermost first."
+  (veritas--node-path node))
+
+(defun veritas-node-titles (node)
+  "Return the names of NODE and its ancestors, outermost first."
+  (veritas--node-path-names node))
+
+(defun veritas-nodes-in-region (start end &optional source)
+  "Return the definitions of SOURCE that overlap START and END."
+  (seq-filter (lambda (node)
+                (and (veritas-node-start node)
+                     (< (veritas-node-start node) end)
+                     (> (or (veritas-node-end node)
+                            (veritas-node-start node))
+                        start)))
+              (veritas-nodes source)))
+
+(defun veritas-nodes-in-line (&optional line source)
+  "Return the definitions that begin on LINE, by default the current line."
+  (let ((line (or line (line-number-at-pos))))
+    (seq-filter (lambda (node) (eql line (veritas-node-line node)))
+                (veritas-nodes source))))
 
 ;;; The run
 
@@ -1158,7 +1203,7 @@
       (veritas--schedule-render run))
      ((string-match veritas--found-regexp text)
       (setf (veritas--run-discovered run)
-            (split-string (match-string 2 text) "[ \11\n]+" t)))
+            (split-string (match-string 2 text) "[ \t\n]+" t)))
      ((string-prefix-p "{" text)
       (veritas--handle-event run text))
      ((string-match veritas--summary-regexp text) nil)
@@ -1180,11 +1225,13 @@
 
 (defun veritas--mark-unrun (node)
   "Flag NODE and its descendants as not having produced a result."
-  (when (and (not (veritas-node-matched node))
-             (not (eq (veritas-node-type node) 'file)))
-    (when (veritas--unit-node-p node)
-      (setf (veritas-node-status node) (if (veritas-node-skip node) 'skip 'not-run)))
-    (dolist (child (veritas-node-children node)) (veritas--mark-unrun child))))
+  (when (and (veritas--unit-node-p node)
+             (not (veritas-node-matched node)))
+    (setf (veritas-node-status node) (if (veritas-node-skip node) 'skip 'not-run)))
+  ;; The walk continues through every node, including a file and a unit that
+  ;; did run: their children are the steps and the assertions to look at.
+  (dolist (child (veritas-node-children node))
+    (veritas--mark-unrun child)))
 
 (defun veritas--finalize (run)
   "Finish RUN: settle its status, fill in what did not run, and draw it."
@@ -1269,9 +1316,11 @@
       (let ((stats (make-vector veritas--stat-width 0)))
         (cond
          ((veritas--unit-node-p node)
-          (aset stats veritas--stat-tests 1)
-          (when (eq (veritas-node-type node) 'benchmark)
-            (aset stats veritas--stat-benchmarks 1))
+          ;; A benchmark is a unit of its own, not a test, so the two are
+          ;; counted apart and the report can say "4 tests, 1 benchmark".
+          (if (eq (veritas-node-type node) 'benchmark)
+              (aset stats veritas--stat-benchmarks 1)
+            (aset stats veritas--stat-tests 1))
           (pcase (veritas-node-status node)
             ('pass (aset stats veritas--stat-passed 1))
             ('fail (aset stats veritas--stat-failed 1))
@@ -1281,13 +1330,14 @@
          ((eq (veritas-node-type node) 'assert)
           (aset stats veritas--stat-assertions 1)
           (when (memq (veritas-node-status node) '(fail error))
-            (aset stats veritas--stat-failed-assertions 1)))
-         (t
-          (dolist (child (veritas-node-children node))
-            (let ((child-stats (veritas--node-stats child table)))
-              (dotimes (index veritas--stat-width)
-                (aset stats index (+ (aref stats index)
-                                     (aref child-stats index))))))))
+            (aset stats veritas--stat-failed-assertions 1))))
+        ;; The children are walked whatever NODE counted as, because the
+        ;; assertions of a test belong to the totals of its file.
+        (dolist (child (veritas-node-children node))
+          (let ((child-stats (veritas--node-stats child table)))
+            (dotimes (index veritas--stat-width)
+              (aset stats index (+ (aref stats index)
+                                   (aref child-stats index))))))
         (puthash node stats table)
         stats)))
 
@@ -1453,7 +1503,9 @@
 
 (defun veritas--insert-path (node)
   "Insert the suite path leading to NODE, without NODE's own name."
-  (let ((names (cdr (veritas--node-path-names node))))
+  ;; The first name is the file and the last one is NODE itself, so neither
+  ;; belongs in the path that the line prints in front of the name.
+  (let ((names (butlast (cdr (veritas--node-path-names node)))))
     (insert (propertize (if names (concat (string-join names " \u203a ") " \u203a ")
                           "")
                         'face 'veritas-suite-face))))
@@ -1502,8 +1554,7 @@
 (defun veritas--stats-line (run totals)
   "Return the counts line of RUN's report, from its TOTALS."
   (let* ((files (length (veritas--run-files run)))
-         (tests (- (aref totals veritas--stat-tests)
-                   (aref totals veritas--stat-benchmarks)))
+         (tests (aref totals veritas--stat-tests))
          (benchmarks (aref totals veritas--stat-benchmarks))
          (assertions (aref totals veritas--stat-assertions))
          (passed (aref totals veritas--stat-passed))
@@ -1704,6 +1755,9 @@
           (setq point-node (veritas--node-at-position (point))
                 point-line (line-number-at-pos)))
         (with-current-buffer buffer
+          ;; The buffer knows which run it is showing, so a link inside it can
+          ;; render again without the caller telling it which run that is.
+          (setq-local veritas--run run)
           (setf (veritas--run-analysis run) nil)
           (let ((inhibit-read-only t))
             (save-excursion

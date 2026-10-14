@@ -1,5 +1,6 @@
 #+title: veritas.el
 #+subtitle: Veritas in Emacs
+#+options: toc:nil
 
 /PROBATIO IN EMACS/ - testing, understood and driven from Emacs
 

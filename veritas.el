@@ -75,10 +75,25 @@
 ;;; Customization
 
 (defcustom veritas-command nil
-  "Command used to run the Veritas CLI, as a list of strings.\n\nThe list is the program and its leading arguments; the CLI flags are appended\nto it, so the default `(\"guix\" \"shell\" \"-m\" \"manifest.scm\" \"--\")'\nwould run a Veritas installed in the project's manifest.\n\nWhen nil, the command is detected: a `bin/veritas' inside the project is\npreferred (wrapped in `guix shell' when the project has a `manifest.scm' and\nGuix is installed, which is how the Veritas sources ask to be run), then a\n`veritas' executable on `PATH', and finally the Veritas CLI module run with\nGuile, under `guix shell' when the project has a manifest, so that a project\nwhich keeps Veritas in its manifest and runs it with Guile is still run the way\nit intends, flags and all.\n\nThis may also be a function taking the project root and returning such a\nlist."
+  "Command used to run the Veritas CLI, as a list of strings.\n\nThe list is the program and its leading arguments; the CLI flags are appended\nto it, so the default `(\"guix\" \"shell\" \"-m\" \"manifest.scm\" \"--\")'\nwould run a Veritas installed in the project's manifest.\n\nWhen nil, the command is detected: a `bin/veritas' inside the project is\npreferred (wrapped in `guix shell' when the project has a `manifest.scm' and\nGuix is installed, which is how the Veritas sources ask to be run), then a\n`veritas' executable on `PATH', and finally the Veritas CLI module run with\nGuile, under `guix shell' when the project has a manifest, so that a project\nwhich keeps Veritas in its manifest and runs it with Guile is still run the way\nit intends, flags and all.  That last case draws Veritas from the checkout\nnamed by `veritas-checkout', or from one vendored in the project or kept beside\nit, when Guix is not how the project is run.\n\nThis may also be a function taking the project root and returning such a\nlist."
   :type '(choice (const :tag "Detect automatically" nil)
                  (repeat string)
                  (function :tag "Function of the project root"))
+  :group 'veritas)
+
+(defcustom veritas-checkout nil
+  "Directory of a Veritas source checkout to run, when needed.\n\nA project that installs no `veritas' of its own can still be run from a\ncheckout of the Veritas sources: the CLI is a module, and a checkout is all\nthat is needed to import it, given Guile and its dependencies.  Point this at\nsuch a checkout, or set `VERITAS_CHECKOUT' in the environment, which is the\nname the Veritas test suite itself uses.\n\nWhen nil, and the project does not get Veritas from its own manifest, a\ncheckout vendored in the project (`veritas/', `vendor/veritas/') or kept beside\nit (`../veritas/') is looked for as well.  That is what lets a project run on a\nmachine with Guile and no Guix, macOS included."
+  :type '(choice (const :tag "Detect automatically" nil) (directory :tag "Checkout"))
+  :group 'veritas)
+
+(defcustom veritas-guile-load-path nil
+  "Extra directories to put on Guile's load path for every run.\n\nFor the Scheme libraries a Veritas run needs when they are not in Guile's own\npath, such as a `guile-fibers' built by hand.  `veritas-env' can carry\n`GUILE_EXTENSIONS_PATH', `LD_LIBRARY_PATH' or `DYLD_LIBRARY_PATH' for the\ncompiled parts of such libraries."
+  :type '(repeat directory)
+  :group 'veritas)
+
+(defcustom veritas-preflight t
+  "Whether a run checks that its checkout can be imported before it starts.\n\nOnly a run that drives the CLI module with Guile can be checked this way: the\ncommand is made to import `(veritas cli)' and `(veritas runner)' with the very\nload path and environment the run will use, and a run whose checkout, fibers or\nJSON support cannot be loaded is reported as it stands and never started.  A\n`guix shell', an installed `veritas' and a project's own `bin/veritas' are\nprograms whose failures are their own to report, and are left alone.\n\nThe check costs one Guile start, which is nothing beside the run it guards; set\nthis to nil to skip it."
+  :type 'boolean
   :group 'veritas)
 
 (defcustom veritas-run-flags nil
@@ -371,31 +386,83 @@
   "((@ (veritas cli) main) (cdr (command-line)))"
   "Guile program that runs the Veritas CLI.\n\nThe CLI is a module, so a project that installs no `veritas' binary runs it the\nway the project's own `bin/veritas' does: Guile evaluates this with the CLI\nflags as its command line.")
 
-(defun veritas--guile-path (root)
-  "Return the `-L' flags that put ROOT's own Scheme modules on Guile's path.\n\nA project keeps its code in whichever of `src', `lib' or the root itself suits\nit and its tests under `veritas-test-top-dir', so all of them are offered; a\ndirectory that is not there is left out rather than passed as an empty entry."
+(defconst veritas--import-program
+  "(use-modules (veritas cli)) (use-modules (veritas runner))"
+  "Guile program that imports everything a run needs from the checkout.\n\nThe CLI module alone says almost nothing about whether a checkout can be used:\nit imports no more than ice-9 and SRFI-1, so a Guile that lacks the fibers the\nrunner schedules on, or the JSON the reporter writes, imports it happily and\nfails only once the run has begun.  These two modules are what a run actually\nloads, so they are what a preflight tries.")
+
+(defun veritas--manifest-p (root)
+  "Return non-nil when ROOT's own manifest can provide Veritas."
+  (and (executable-find "guix")
+       (file-exists-p (expand-file-name "manifest.scm" root))))
+
+(defun veritas--checkout-directory (dir)
+  "Return the load path directory of the Veritas checkout in DIR, or nil.\n\nA checkout keeps its modules under `src', which is what its own `bin/veritas'\nputs on the path; one laid out another way is taken as it stands."
+  (let ((dir (expand-file-name dir)))
+    (cond ((file-exists-p (expand-file-name "src/veritas/cli.scm" dir))
+           (expand-file-name "src" dir))
+          ((file-exists-p (expand-file-name "veritas/cli.scm" dir))
+           dir))))
+
+(defun veritas--checkout-directories (root &optional discover)
+  "Return the load path directories of the Veritas checkout used in ROOT.\n\nAn explicit `veritas-checkout', or `VERITAS_CHECKOUT' in the environment, is\nalways honoured.  When DISCOVER is non-nil a checkout vendored in the project\nor kept beside it is looked for too, which is the case that matters when there\nis no Guix to take Veritas from the project's manifest."
+  (let ((named (or veritas-checkout (getenv "VERITAS_CHECKOUT"))))
+    (delq nil
+          (list (and named (veritas--checkout-directory named))
+                (and discover (veritas--checkout-directory
+                               (expand-file-name "veritas" root)))
+                (and discover (veritas--checkout-directory
+                               (expand-file-name "vendor/veritas" root)))
+                (and discover (veritas--checkout-directory
+                               (expand-file-name "../veritas" root)))))))
+
+(defun veritas--load-path-directories (root &optional discover)
+  "Return the Guile load path directories for a run in ROOT, best first.\n\nPrecedence is this order: whatever `veritas-guile-load-path' asks for, then\nthe Veritas checkout that supplies the library, then the directory the run\nreads its files from and the project's own `lib', `src' and root.  A directory\nthat is not there is left out.  `veritas--load-path-env' keeps this order,\nsince Guile searches the entries of `GUILE_LOAD_PATH' as it finds them;\n`veritas--guile-path' turns it around, since Guile prepends every `-L' as it\nreads it and so searches the last one first."
+  (delete-dups
+   (append (mapcar #'expand-file-name veritas-guile-load-path)
+           (veritas--checkout-directories root discover)
+           (seq-filter #'file-directory-p
+                       (mapcar (lambda (dir) (expand-file-name dir root))
+                               (list veritas-test-top-dir
+                                     "lib" "src" ""))))))
+
+(defun veritas--guile-path (root &optional discover)
+  "Return the `-L' flags that put ROOT's modules and Veritas's on Guile's path.\n\nThe flags are given worst first, because Guile searches `-L' entries in\nreverse: the first directory `veritas--load-path-directories' returns is\nemitted last, and so is the one that decides a module name that two directories\nboth provide."
   (apply #'append
          (mapcar (lambda (dir) (list "-L" dir))
-                 (seq-filter #'file-directory-p
-                             (list root
-                                   (expand-file-name "src" root)
-                                   (expand-file-name "lib" root)
-                                   (expand-file-name veritas-test-top-dir root))))))
+                 (reverse (veritas--load-path-directories root discover)))))
+
+(defun veritas--load-path-env (env root)
+  "Return ENV with `GUILE_LOAD_PATH' completed for a run in ROOT.\n\nWhat ENV already asks for keeps its place at the front, the directories this\npackage knows about follow, and the value the parent Emacs inherited comes\nlast, so that a run never stops finding something it could find before.  The\nvariable is left alone when there is nothing at all to put in it."
+  (let* ((asked (cdr (assoc "GUILE_LOAD_PATH" env)))
+         (dirs (veritas--load-path-directories root
+                                               (not (veritas--manifest-p root))))
+         (value (string-join (delq nil (list asked
+                                             (and dirs (string-join dirs ":"))
+                                             (getenv "GUILE_LOAD_PATH")))
+                             ":")))
+    (if (string-empty-p value)
+        env
+      (cons (cons "GUILE_LOAD_PATH" value)
+            (seq-remove (lambda (pair) (equal (car pair) "GUILE_LOAD_PATH"))
+                        env)))))
 
 (defun veritas--default-command (root)
-  "Return the Veritas command to use inside ROOT.\n\nThe project's own `bin/veritas' wins, because it pins the Veritas version the\nproject is written against; it is wrapped in `guix shell -m manifest.scm' when\nthe project has a manifest and Guix is installed, since that is how the Veritas\nsources ask to be run and it is the only way the runner's fiber and JSON\ndependencies are guaranteed to be present.\n\nFailing that a `veritas' executable on `PATH' is used, and failing that the\nVeritas CLI module run with Guile, under `guix shell' when the project has a\nmanifest.  That last case is a project which depends on the Veritas package in\nits own manifest and runs its tests with Guile: the flags stay the CLI's, and\nthe project's own directories go on the load path so the `use-modules' of its\ntests resolve."
+  "Return the Veritas command to use inside ROOT.\n\nThe project's own `bin/veritas' wins, because it pins the Veritas version the\nproject is written against; it is wrapped in `guix shell -m manifest.scm' when\nthe project has a manifest and Guix is installed, since that is how the Veritas\nsources ask to be run and it is the only way the runner's fiber and JSON\ndependencies are guaranteed to be present.\n\nFailing that a `veritas' executable on `PATH' is used, and failing that the\nVeritas CLI module run with Guile, under `guix shell' when the project has a\nmanifest.  That last case is a project which depends on the Veritas package in\nits own manifest and runs its tests with Guile: the flags stay the CLI's, and\nthe project's own directories go on the load path so the `use-modules' of its\ntests resolve.\n\nA project can equally be run where Guix is not how anything happens, macOS\namong them.  The CLI is a module, so a checkout of the Veritas sources is\nenough to import it: `veritas-checkout' names one, a checkout vendored in the\nproject (`veritas/', `vendor/veritas/') or kept beside it (`../veritas/') is\ndiscovered on its own, and the checkout's `src' goes on the load path last,\nwhere it decides the library's own module names.  Guile and whatever that\ncheckout needs to load are the whole requirement; anything it does not carry\nitself is left to `veritas-guile-load-path' and `veritas-env'."
   (let ((launcher (expand-file-name "bin/veritas" root))
         (manifest (expand-file-name "manifest.scm" root)))
     (cond
      ((file-executable-p launcher)
-      (if (and (executable-find "guix") (file-exists-p manifest))
+      (if (veritas--manifest-p root)
           (list "guix" "shell" "-m" manifest "--" launcher)
         (list launcher)))
      ((executable-find "veritas") (list "veritas"))
      ((executable-find "guile")
-      (append (when (and (executable-find "guix") (file-exists-p manifest))
+      ;; `-L' entries win over the load path of the environment, so a checkout
+      ;; from beside the project is used when the manifest is not providing one.
+      (append (when (veritas--manifest-p root)
                 (list "guix" "shell" "-m" manifest "--"))
               (list "guile")
-              (veritas--guile-path root)
+              (veritas--guile-path root (not (veritas--manifest-p root)))
               (list "-c" veritas--cli-program "--")))
      (t (list "veritas")))))
 
@@ -405,6 +472,81 @@
         ((consp veritas-command) veritas-command)
         ((stringp veritas-command) (list veritas-command))
         (t (veritas--default-command root))))
+
+(defun veritas--process-environment (root extra-env)
+  "Return the environment for a run in ROOT, from EXTRA-ENV and `veritas-env'.\n\nEXTRA-ENV is added to `veritas-env', and `veritas--load-path-env' completes\n`GUILE_LOAD_PATH' for the run.  The preflight asks for this too, so what it\nimports is imported exactly as the run would import it."
+  (append (mapcar (lambda (pair)
+                    (concat (car pair) "=" (cdr pair)))
+                  (veritas--load-path-env (append veritas-env extra-env) root))
+          process-environment))
+
+(defun veritas--probe-command (command)
+  "Return the Guile command that imports what a run with COMMAND will load.\n\nNil when COMMAND is not the CLI module driven by Guile, which is the only form\nthat can be probed without starting the run: a `guix shell', an installed\n`veritas' and a project's own `bin/veritas' are programs whose failures are\ntheirs to report, and reaching through any of them would cost a whole shell."
+  (when (equal "guile" (car command))
+    (let ((flags (seq-take-while (lambda (arg) (not (equal "-c" arg)))
+                                 command)))
+      ;; The `-c' is what tells the CLI program from Guile's own arguments.
+      (when (< (length flags) (length command))
+        (append flags (list "-c" veritas--import-program))))))
+
+(defconst veritas--missing-module-prefix "no code for module ("
+  "Text Guile prints before the name of a module it cannot find.\n\nThe line it makes of it names the module in parentheses, which is the whole of\nwhat a failure to load the library or one of its dependencies looks like from\nthe outside.")
+
+(defun veritas--missing-module (line)
+  "Return the module LINE names as missing, or nil when it names none."
+  (let ((prefix veritas--missing-module-prefix))
+    (when (and (string-prefix-p prefix line)
+               (string-suffix-p ")" line))
+      (substring line (length prefix) (1- (length line))))))
+
+(defun veritas--probe-message (output)
+  "Return a sentence saying why a preflight probe that printed OUTPUT failed.\n\nA module Guile could not find is named for what it is: one of the library's own\nmodules means the checkout is not on the load path, and anything else is a\ndependency of the library, such as the fibers the runner needs."
+  (let* ((lines (reverse (split-string output "\n" t)))
+         (missing (seq-find #'veritas--missing-module lines)))
+    (if (not missing)
+        (format "Guile could not load the Veritas CLI: %s"
+                (or (seq-find (lambda (line) (not (string-empty-p (string-trim line))))
+                              lines)
+                    "it said nothing at all"))
+      (let ((module (veritas--missing-module missing)))
+        (if (string-prefix-p "veritas" module)
+            (format (concat "Guile cannot find the module (%s): a checkout of "
+                            "the Veritas sources has to be on its load path, "
+                            "through veritas-checkout or "
+                            "veritas-guile-load-path")
+                    module)
+          (format (concat "Guile cannot find the module (%s), which the "
+                          "Veritas runner needs: install it for this Guile, "
+                          "or name the directory it is in with "
+                          "veritas-guile-load-path")
+                  module))))))
+
+(defun veritas--preflight (root command extra-env)
+  "Return the reasons COMMAND cannot run Veritas in ROOT, as a list of strings.\n\nAn empty list means the run looks possible: the program is there, a checkout\nnamed through `veritas-checkout' is a checkout, and, when the command drives\nthe CLI module with Guile, that Guile can import it and everything it needs."
+  (let (reasons)
+    (unless (executable-find (car command))
+      (push (format "%s is not on PATH" (car command)) reasons))
+    (let ((named (or veritas-checkout (getenv "VERITAS_CHECKOUT"))))
+      (when (and named (not (veritas--checkout-directory named)))
+        (push (format (concat "%s is not a checkout of the Veritas sources, "
+                              "so it provides no (veritas cli)")
+                      (abbreviate-file-name (expand-file-name named)))
+              reasons)))
+    ;; There is nothing to probe without the program to probe with.
+    (let ((probe (and (null reasons) (veritas--probe-command command))))
+      (when probe
+        (let ((buffer (get-buffer-create " *veritas-preflight*"))
+              (process-environment (veritas--process-environment root extra-env))
+              (default-directory (file-name-as-directory root)))
+          (with-current-buffer buffer
+            (let ((inhibit-read-only t)) (erase-buffer)))
+          (let ((status (apply #'call-process (car probe) nil (list buffer t) nil
+                               (cdr probe))))
+            (unless (and (integerp status) (zerop status))
+              (push (veritas--probe-message
+                     (with-current-buffer buffer (buffer-string)))
+                    reasons))))))
+    (nreverse reasons)))
 
 (defun veritas--run-flags (root &optional extra no-benchmarks)
   "Return the CLI flags for a run in ROOT.\n\nEXTRA is appended last, so it can override what came before.  When\nNO-BENCHMARKS is non-nil the benchmarks are skipped whatever\n`veritas-run-benchmarks' says."
@@ -447,15 +589,13 @@
                       (concat veritas-test-top-dir "/" module "/"
                               veritas-test-type "/"
                               (file-relative-name file base))
-                      tmp))
-             (existing (getenv "GUILE_LOAD_PATH")))
+                      tmp)))
         (veritas--ensure-directory (file-name-directory target))
         (make-symbolic-link file target)
+        ;; Only `top' here: `veritas--load-path-env' completes the variable for
+        ;; the run, keeping what this asks for in front.
         (list (list "--scan-dir" tmp)
-              (list (cons "GUILE_LOAD_PATH"
-                          (if (and existing (not (string-empty-p existing)))
-                              (concat top ":" existing)
-                            top)))
+              (list (cons "GUILE_LOAD_PATH" top))
               tmp)))))
 
 ;;; The source model
@@ -881,6 +1021,18 @@
   "Return the identifier of the next run."
   (setq veritas--run-counter (1+ veritas--run-counter)))
 
+(defun veritas--refuse (run problems)
+  "Finish RUN without starting it, because of PROBLEMS.\n\nThe reasons go where a failure of the run itself goes, so the report says what\nis wrong before a single test is read, and the raw log stays empty because\nnothing was ever run."
+  (dolist (problem problems)
+    (push (format "the run did not start: %s" problem)
+          (veritas--run-fatal run)))
+  (setf (veritas--run-status run) 'failed
+        (veritas--run-ended run) (current-time))
+  (veritas--render run)
+  (veritas--maybe-display-report run)
+  (message "veritas: %s" (car problems))
+  run)
+
 (defun veritas--start (root flags &optional overrides)
   "Run Veritas in ROOT with FLAGS.\n\nOVERRIDES is a list of (EXTRA-FLAGS EXTRA-ENV CLEANUP) supplied by a command\nthat needs to narrow the run, as `veritas-run-file' does.  Returns the new run."
   (let* ((extra-flags (nth 0 overrides))
@@ -922,27 +1074,29 @@
         (veritas--insert-header run)))
     (setq veritas--last-run run)
     (push run veritas--runs)
-    (let ((process-environment
-           (append (mapcar (lambda (pair)
-                             (concat (car pair) "=" (cdr pair)))
-                           (append veritas-env extra-env))
-                   process-environment))
-          (default-directory (file-name-as-directory root)))
-      (setf (veritas--run-process run)
-            (make-process
-             :name (format "veritas-%s" id)
-             :command command
-             :buffer nil
-             :filter #'veritas--filter
-             :sentinel #'veritas--sentinel
-             :stderr (veritas--run-stderr-buffer run)
-             :connection-type 'pipe
-             :coding 'utf-8
-             :noquery t)))
-    (puthash (veritas--run-process run) run veritas--process-runs)
-    (when veritas-pop-to-report
-      (veritas--display-report run))
-    run))
+    (let ((problems (and veritas-preflight
+                         (veritas--preflight root command extra-env))))
+      (if problems
+          ;; A checkout that cannot be imported is worth saying plainly, in the
+          ;; report, before a single test is read.
+          (veritas--refuse run problems)
+        (let ((process-environment (veritas--process-environment root extra-env))
+              (default-directory (file-name-as-directory root)))
+          (setf (veritas--run-process run)
+                (make-process
+                 :name (format "veritas-%s" id)
+                 :command command
+                 :buffer nil
+                 :filter #'veritas--filter
+                 :sentinel #'veritas--sentinel
+                 :stderr (veritas--run-stderr-buffer run)
+                 :connection-type 'pipe
+                 :coding 'utf-8
+                 :noquery t)))
+        (puthash (veritas--run-process run) run veritas--process-runs)
+        (when veritas-pop-to-report
+          (veritas--display-report run))
+        run))))
 
 (defun veritas--filter (process output)
   "Read what PROCESS printed, one line at a time, into its run."
@@ -2324,20 +2478,34 @@
                             'face 'veritas-stat-face)))
       (add-hook 'kill-buffer-hook #'veritas--kill-raw-process nil t)
       (setq default-directory (file-name-as-directory root)))
-    (pop-to-buffer buffer)
-    (setq veritas--raw-process
-          (make-process :name "veritas-raw"
-                        :command command
-                        :buffer nil
-                        :filter (lambda (_process text)
-                                  (veritas--raw-filter buffer text))
-                        :stderr buffer
-                        :connection-type 'pipe
-                        :coding 'utf-8
-                        :noquery t))
-    (cl-pushnew (veritas--make-run :id 0 :root root :command command :status 'passed)
-                veritas--runs)
-    veritas--raw-process))
+    (let ((problems (and veritas-preflight
+                         (veritas--preflight root command nil))))
+      (pop-to-buffer buffer)
+      (if problems
+          ;; A terminal-style log is no place to dig a backtrace out of: the
+          ;; reason goes at the top, where the command is.
+          (progn
+            (with-current-buffer buffer
+              (let ((inhibit-read-only t))
+                (dolist (problem problems)
+                  (insert (propertize (concat "veritas: " problem "\n")
+                                      'face 'veritas-error-face)))))
+            (message "veritas: %s" (car problems))
+            (setq veritas--raw-process nil))
+        (setq veritas--raw-process
+              (make-process :name "veritas-raw"
+                            :command command
+                            :buffer nil
+                            :filter (lambda (_process text)
+                                      (veritas--raw-filter buffer text))
+                            :stderr buffer
+                            :connection-type 'pipe
+                            :coding 'utf-8
+                            :noquery t))
+        (cl-pushnew (veritas--make-run :id 0 :root root :command command
+                                       :status 'passed)
+                    veritas--runs))
+      veritas--raw-process)))
 
 ;;; The minor mode for Veritas sources
 

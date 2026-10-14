@@ -297,50 +297,83 @@
     (should (member "--no-benchmarks" flags))
     (should-not (member "--benchmarks" flags))))
 
-(defmacro veritas-test--with-executables (present &rest body)
-  "Run BODY with `executable-find' answering only for the names in PRESENT."
+(defmacro veritas-test--detecting (executables &rest body)
+  "Run BODY with only EXECUTABLES findable and no checkout named by the env."
   (declare (indent 1) (debug t))
   `(cl-letf (((symbol-function 'executable-find)
-              (lambda (name) (and (member name ',present)
+              (lambda (name) (and (member name ',executables)
                                   (concat "/usr/bin/" name)))))
-     ,@body))
+     (let ((process-environment
+            (seq-remove (lambda (var)
+                          (string-prefix-p "VERITAS_CHECKOUT=" var))
+                        process-environment))
+           (veritas-checkout nil))
+       ,@body)))
 
-(defun veritas-test--project (with-launcher)
-  "Make a throwaway project with a manifest and, when asked, a launcher."
-  (let ((root (make-temp-file "veritas-project-" t)))
+(defun veritas-test--checkout (dir)
+  "Make DIR look like a checkout of the Veritas sources."
+  (make-directory (expand-file-name "src/veritas" dir) t)
+  (with-temp-file (expand-file-name "src/veritas/cli.scm" dir)
+    (insert "(define-module (veritas cli))\n"))
+  dir)
+
+(defun veritas-test--project (&rest options)
+  "Make a throwaway project, returning its root.
+
+The project holds a manifest and a test directory.  OPTIONS may hold
+`launcher' for a `bin/veritas' of its own, `vendored' for a checkout of the
+Veritas sources inside it, and `sibling' for one beside it.  It sits alone in
+a fresh directory, so nothing else can be discovered next to it."
+  (let* ((parent (make-temp-file "veritas-hacking-" t))
+         (root (expand-file-name "project" parent)))
+    (make-directory (expand-file-name "test/veritas/unit" root) t)
     (with-temp-file (expand-file-name "manifest.scm" root)
       (insert "(packages->manifest (list guile-3.0-latest))\n"))
-    (make-directory (expand-file-name "test/veritas/unit" root) t)
-    (when with-launcher
+    (when (memq 'launcher options)
       (make-directory (expand-file-name "bin" root) t)
       (let ((launcher (expand-file-name "bin/veritas" root)))
         (with-temp-file launcher (insert "#!/bin/sh\nexit 0\n"))
         (set-file-modes launcher #o755)))
+    (when (memq 'vendored options)
+      (veritas-test--checkout (expand-file-name "veritas" root)))
+    (when (memq 'sibling options)
+      (veritas-test--checkout (expand-file-name "veritas" parent)))
     root))
+
+(defun veritas-test--forget-project (root)
+  "Delete ROOT and the throwaway directory holding it."
+  (delete-directory (file-name-directory (directory-file-name root)) t))
+
+(defun veritas-test--guile-load-paths (command)
+  "Return the directories COMMAND gives to Guile's `-L', in order."
+  (let (directories)
+    (while (setq command (cdr (member "-L" command)))
+      (push (car command) directories))
+    (nreverse directories)))
 
 (ert-deftest veritas-test-default-command-prefers-the-project-launcher ()
   "A project's own `bin/veritas' is run, through Guix when it has a manifest."
-  (let ((root (veritas-test--project t)))
+  (let ((root (veritas-test--project 'launcher)))
     (unwind-protect
         (progn
-          (veritas-test--with-executables ("guix" "veritas")
+          (veritas-test--detecting ("guix" "veritas")
             (should (equal (list "guix" "shell" "-m"
                                  (expand-file-name "manifest.scm" root)
                                  "--" (expand-file-name "bin/veritas" root))
                            (veritas--default-command root))))
           ;; Without Guix the launcher is used as it stands, and a `veritas'
           ;; on PATH never takes its place.
-          (veritas-test--with-executables ("veritas")
+          (veritas-test--detecting ("veritas")
             (should (equal (list (expand-file-name "bin/veritas" root))
                            (veritas--default-command root)))))
-      (delete-directory root t))))
+      (veritas-test--forget-project root))))
 
 (ert-deftest veritas-test-default-command-uses-guile-for-the-cli ()
   "A project without a launcher gets the CLI module, not bare Guile."
-  (let ((root (veritas-test--project nil)))
+  (let ((root (veritas-test--project)))
     (unwind-protect
         (progn
-          (veritas-test--with-executables ("guile" "guix")
+          (veritas-test--detecting ("guile" "guix")
             (let ((command (veritas--default-command root)))
               (should (equal "guix" (car command)))
               (should (member "guile" command))
@@ -356,12 +389,237 @@
           ;; Without a manifest there is no shell to enter, but the rest is
           ;; the same.
           (delete-file (expand-file-name "manifest.scm" root))
-          (veritas-test--with-executables ("guile" "guix")
+          (veritas-test--detecting ("guile" "guix")
             (should (equal (list "guile" "-L" root "-L"
                                  (expand-file-name "test" root)
                                  "-c" veritas--cli-program "--")
                            (veritas--default-command root)))))
-      (delete-directory root t))))
+      (veritas-test--forget-project root))))
+
+(ert-deftest veritas-test-default-command-finds-a-local-checkout ()
+  "With Guile but no Guix, a nearby Veritas checkout is used."
+  (dolist (layout '((vendored) (sibling)))
+    (let* ((root (apply #'veritas-test--project layout))
+           (checkout (expand-file-name (if (memq 'sibling layout)
+                                           "../veritas" "veritas")
+                                       root)))
+      (unwind-protect
+          (progn
+            (veritas-test--detecting ("guile")
+              (let ((command (veritas--default-command root)))
+                ;; No Guix anywhere: Guile runs the CLI module itself.
+                (should (equal "guile" (car command)))
+                (should-not (member "guix" command))
+                (should-not (member "shell" command))
+                ;; The checkout is on the load path, last, so that it wins for
+                ;; the library's own module names.
+                (should (equal (expand-file-name "src" checkout)
+                               (car (last (veritas-test--guile-load-paths
+                                           command)))))
+                (should (equal (list "-c" veritas--cli-program "--")
+                               (last command 3))))))
+        (veritas-test--forget-project root)))))
+
+(ert-deftest veritas-test-checkout-can-be-named ()
+  "A named checkout is used, and it outranks the ones lying near the project."
+  (let* ((root (veritas-test--project 'vendored 'sibling))
+         (parent (file-name-directory (directory-file-name root)))
+         (vendored (expand-file-name "src" (expand-file-name "veritas" root)))
+         (sibling (expand-file-name "src" (expand-file-name "../veritas" root)))
+         (relative "named-checkout")
+         (named (expand-file-name
+                 "src" (veritas-test--checkout
+                        (expand-file-name relative parent)))))
+    (unwind-protect
+        (progn
+          ;; The manifest provides Veritas, so nothing beside or inside the
+          ;; project is looked for on its own; only the name reaches one.
+          (veritas-test--detecting ("guile" "guix")
+            (should-not (member vendored (veritas--default-command root)))
+            (let ((veritas-checkout (expand-file-name relative parent)))
+              (should (member named (veritas--default-command root)))))
+          ;; Named, it is the first directory of the load path -- the last
+          ;; `-L', which is the one Guile searches first -- ahead of the
+          ;; checkout the project carries and the one it sits beside.
+          (veritas-test--detecting ("guile")
+            (let ((veritas-checkout (expand-file-name relative parent)))
+              (let ((searched (reverse (veritas-test--guile-load-paths
+                                        (veritas--default-command root)))))
+                (should (equal (list named vendored) (seq-take searched 2)))
+                (should (member sibling searched)))))
+          ;; Left to itself, the checkout the project carries wins over the one
+          ;; beside it: what the project holds is what it was written against.
+          (veritas-test--detecting ("guile")
+            (let ((searched (reverse (veritas-test--guile-load-paths
+                                      (veritas--default-command root)))))
+              (should (equal (list vendored sibling) (seq-take searched 2))))))
+      (veritas-test--forget-project root))))
+
+;;; The preflight of a run's checkout
+
+(ert-deftest veritas-test-probe-command-keeps-the-load-path ()
+  "A probe is the run's own command with an import in place of its program."
+  (let ((root (veritas-test--fixture-root)))
+    (veritas-test--detecting ("guile")
+      (let* ((command (veritas--default-command root))
+             (probe (veritas--probe-command command)))
+        (should probe)
+        (should (equal "guile" (car probe)))
+        (should (equal (veritas-test--guile-load-paths command)
+                       (veritas-test--guile-load-paths probe)))
+        (should (equal (list "-c" veritas--import-program) (last probe 2)))))))
+
+(ert-deftest veritas-test-probe-command-leaves-wrappers-alone ()
+  "A wrapper, an installed `veritas' and a bare Guile are not probed."
+  (dolist (command (list (append (list "guix" "shell" "-m" "manifest.scm" "--")
+                                 (list "guile" "-c" veritas--cli-program "--"))
+                         (list "veritas" "--reporter" "json-reporter")
+                         (list "/project/bin/veritas")
+                         (list "guile" "-L" "/project")))
+    (should-not (veritas--probe-command command))))
+
+(ert-deftest veritas-test-probe-message-names-the-missing-module ()
+  "Guile's report of a module it could not find is turned into advice."
+  (let ((dependency (veritas--probe-message
+                     (concat "Backtrace:\nIn procedure resolve-interface:\n"
+                             veritas--missing-module-prefix "fibers)\n")))
+        (library (veritas--probe-message
+                  (concat veritas--missing-module-prefix "veritas cli)\n")))
+        (other (veritas--probe-message "Backtrace:\nsomething went wrong\n")))
+    (should (string-match-p "(fibers)" dependency))
+    (should (string-match-p "veritas-guile-load-path" dependency))
+    (should (string-match-p "(veritas cli)" library))
+    (should (string-match-p "veritas-checkout" library))
+    (should (string-match-p "something went wrong" other))))
+
+(ert-deftest veritas-test-preflight-reports-a-missing-program ()
+  "A program that is not on PATH is a reason not to start."
+  (let ((root (veritas-test--fixture-root)))
+    (veritas-test--detecting ()
+      (let ((reasons (veritas--preflight root '("no-such-veritas") nil)))
+        (should (seq-find (lambda (reason) (string-match-p "not on PATH" reason))
+                          reasons))))))
+
+(ert-deftest veritas-test-preflight-reports-a-checkout-that-is-not-one ()
+  "A named `veritas-checkout' that holds no CLI is said to hold none."
+  (let ((root (veritas-test--fixture-root))
+        (named (make-temp-file "veritas-not-a-checkout-" t)))
+    (unwind-protect
+        (veritas-test--detecting ("guile")
+          ;; Nothing to probe once the named checkout is known to be no
+          ;; checkout at all.
+          (cl-letf (((symbol-function 'call-process)
+                     (lambda (&rest _) (error "no probe was needed"))))
+            (let ((veritas-checkout named))
+              (let ((reasons (veritas--preflight root
+                                                 (veritas--default-command root)
+                                                 nil)))
+                (should (seq-find (lambda (reason)
+                                    (string-match-p "not a checkout" reason))
+                                  reasons))))))
+      (delete-directory named t))))
+
+(ert-deftest veritas-test-preflight-passes-a-checkout-that-imports ()
+  "A probe that exits cleanly leaves nothing to report."
+  (let ((root (veritas-test--fixture-root)))
+    (veritas-test--detecting ("guile")
+      (cl-letf (((symbol-function 'call-process) (lambda (&rest _) 0)))
+        (should-not (veritas--preflight root (veritas--default-command root) nil))))))
+
+(ert-deftest veritas-test-preflight-refuses-a-checkout-that-cannot-import ()
+  "The module a broken checkout fails on is named, and the run refused."
+  (let ((root (veritas-test--fixture-root))
+        (probe nil))
+    (veritas-test--detecting ("guile")
+      (let ((command (veritas--default-command root)))
+        (cl-letf (((symbol-function 'call-process)
+                   (lambda (program _infile destination _display &rest args)
+                     (setq probe (cons program args))
+                     (with-current-buffer (car destination)
+                       (insert "Backtrace:\n")
+                       (insert veritas--missing-module-prefix "fibers)\n"))
+                     1)))
+          (let ((reasons (veritas--preflight root command nil)))
+            (should (= 1 (length reasons)))
+            (should (string-match-p "(fibers)" (car reasons)))
+            (should (equal (veritas--probe-command command) probe))))))))
+
+(ert-deftest veritas-test-a-run-that-cannot-import-its-checkout-is-not-started ()
+  "The report says why, instead of a run that fails for no visible reason."
+  (let* ((root (veritas-test--fixture-root))
+         (veritas-command (list "guile" "-L" root "-c" veritas--cli-program "--"))
+         (veritas-pop-to-report nil)
+         (veritas-show-report 'never)
+         (run nil))
+    (cl-letf (((symbol-function 'call-process)
+               (lambda (_program _infile destination &rest _args)
+                 (with-current-buffer (car destination)
+                   (insert veritas--missing-module-prefix "fibers)\n"))
+                 1)))
+      (setq run (veritas--start root (veritas--run-flags root '("--no-benchmarks"))))
+      (should-not (veritas-running-p run))
+      (should (equal 'failed (veritas--run-status run)))
+      (should-not (veritas--run-process run))
+      (should-not (veritas--run-exit run))
+      (let ((text (with-current-buffer (veritas--run-buffer run) (buffer-string))))
+        (should (string-match-p "the run did not start" text))
+        (should (string-match-p "(fibers)" text))
+        ;; What would have run is still there to read.
+        (should (string-match-p "guile" text))))))
+
+(ert-deftest veritas-test-a-raw-run-that-cannot-import-is-not-started ()
+  "The escape hatch says why instead of leaving a backtrace to read."
+  (let* ((root (veritas-test--fixture-root))
+         (default-directory (file-name-as-directory root))
+         (veritas-command (list "guile" "-L" root "-c" veritas--cli-program "--")))
+    (cl-letf (((symbol-function 'call-process)
+               (lambda (_program _infile destination _display &rest _args)
+                 (with-current-buffer (car destination)
+                   (insert veritas--missing-module-prefix "fibers)\n"))
+                 1)))
+      (should-not (veritas-run-raw))
+      (should-not veritas--raw-process)
+      (let ((text (with-current-buffer (get-buffer veritas-log-buffer-name)
+                    (buffer-string))))
+        (should (string-match-p "veritas: Guile cannot find the module (fibers)" text))
+        ;; What would have run is still there to read.
+        (should (string-match-p "\\$ guile" text))))))
+
+(ert-deftest veritas-test-preflight-can-be-turned-off ()
+  "With `veritas-preflight' nil nothing is probed and the run starts."
+  (let* ((root (veritas-test--fixture-root))
+         (veritas-command '("sh" "-c" "exit 0"))
+         (veritas-preflight nil)
+         (veritas-pop-to-report nil)
+         (veritas-show-report 'never)
+         (run nil))
+    (cl-letf (((symbol-function 'call-process)
+               (lambda (&rest _) (error "nothing should have been probed"))))
+      (setq run (veritas--start root (veritas--run-flags root '("--no-benchmarks"))))
+      (let ((deadline (+ (float-time) 30)))
+        (while (and (veritas-running-p run) (< (float-time) deadline))
+          (accept-process-output nil 0.1)))
+      (should-not (veritas-running-p run))
+      (should (equal 0 (veritas--run-exit run)))
+      (should-not (veritas--run-fatal run)))))
+
+(ert-deftest veritas-test-load-path-env-keeps-what-was-there ()
+  "The run's `GUILE_LOAD_PATH' adds to what was asked for, never replaces it."
+  (let ((root (veritas-test--project 'sibling)))
+    (unwind-protect
+        (veritas-test--detecting ("guile" "guix")
+          (let* ((env (veritas--load-path-env
+                       '(("GUILE_LOAD_PATH" . "/asked")) root))
+                 (value (cdr (assoc "GUILE_LOAD_PATH" env))))
+            (should (equal "/asked" (car (split-string value ":"))))
+            (should (member root (split-string value ":")))
+            (should (member (expand-file-name "test" root)
+                            (split-string value ":")))
+            ;; With Guix and a manifest, the library comes from the manifest,
+            ;; so a checkout beside the project is left out.
+            (should-not (member (expand-file-name "veritas/src" root)
+                                (split-string value ":")))))
+      (veritas-test--forget-project root))))
 
 (ert-deftest veritas-test-strip-selecting-flags ()
   "A rerun that selects something new drops the old selection."

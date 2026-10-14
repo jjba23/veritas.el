@@ -176,6 +176,32 @@ stops the run it belongs to.
    project's =src=, =lib=, root and =test= directories go on the load path so
    the =use-modules= of its own tests resolve.
 
+The CLI is a module rather than a binary, so all the last case really needs is a
+copy of the Veritas sources to import.  Wherever Guix is not how the project is
+run --- macOS, a distribution package for Guile, a checkout you build by hand
+--- a local copy of Veritas serves just as well:
+
+#+begin_src emacs-lisp
+(setq veritas-checkout "~/Hacking/veritas")  ; or VERITAS_CHECKOUT in the env
+#+end_src
+
+That checkout is put on Guile's load path for every run, and when the project
+also has no manifest to enter, one vendored inside it (=veritas/=,
+=vendor/veritas/=) or kept beside it (=../veritas/=) is discovered on its own.
+The only dependency is the one Veritas itself has: Guile with its libraries
+(=fibers= for the runner).  =veritas-guile-load-path= adds further directories,
+and =veritas-env= carries =GUILE_EXTENSIONS_PATH= or =DYLD_LIBRARY_PATH= for a
+library built by hand elsewhere.
+
+A run driven that way is *checked before it starts*.  The very command that
+would run is made to import =(veritas cli)= and =(veritas runner)=, with the
+same load path and environment, and if that fails the run is not started: the
+report names the module Guile could not find and what to do about it, while the
+command that would have run stays there to read.  A missing =fibers=, a checkout
+that is not where it was said to be, a =guile= that is not on =PATH= --- each
+is said plainly, in a tenth of a second, instead of surfacing later as a run
+that failed for no visible reason.  =veritas-preflight= turns the check off.
+
 The flags follow the project layout: =--reporter json-reporter= for the
 structured report, =--test-type= (=veritas-test-type=), =--test-module=
 (=veritas-test-module=, detected from the single directory under the top dir when
@@ -204,13 +230,17 @@ Put the directory on =load-path= and require it:
 #+end_src
 
 Only Emacs 27.1 and its bundled libraries are needed; =transient= is used when
-it is there.  Guile and Guix are needed only to actually run tests.
+it is there.  Guile is needed only to actually run tests, and Guix only when the
+project asks for it --- through its own =bin/veritas= or its manifest.
 
 * Customization
 
 | Variable                        | Default        | Meaning                                     |
 |---------------------------------+----------------+---------------------------------------------|
 | =veritas-command=               | =nil=          | Command that runs the CLI, or a function of the root. |
+| =veritas-checkout=              | =nil=          | Veritas source checkout to run when needed. |
+| =veritas-guile-load-path=       | =nil=          | Extra directories on Guile's load path.     |
+| =veritas-preflight=             | =t=            | Check the checkout imports before a run.    |
 | =veritas-run-flags=             | =nil=          | Extra flags for every run.                  |
 | =veritas-env=                   | =nil=          | Extra environment for every run.            |
 | =veritas-test-type=             | ="unit"=       | =--test-type=.                              |

@@ -75,7 +75,7 @@
 ;;; Customization
 
 (defcustom veritas-command nil
-  "Command used to run the Veritas CLI, as a list of strings.\n\nThe list is the program and its leading arguments; the CLI flags are appended\nto it, so the default `(\"guix\" \"shell\" \"-m\" \"manifest.scm\" \"--\")'\nwould run a Veritas installed in the project's manifest.\n\nWhen nil, the command is detected: a `bin/veritas' inside the project is\npreferred (wrapped in `guix shell' when the project has a `manifest.scm' and\nGuix is installed, which is how the Veritas sources ask to be run), falling\nback to a `veritas' executable on `PATH'.\n\nThis may also be a function taking the project root and returning such a\nlist."
+  "Command used to run the Veritas CLI, as a list of strings.\n\nThe list is the program and its leading arguments; the CLI flags are appended\nto it, so the default `(\"guix\" \"shell\" \"-m\" \"manifest.scm\" \"--\")'\nwould run a Veritas installed in the project's manifest.\n\nWhen nil, the command is detected: a `bin/veritas' inside the project is\npreferred (wrapped in `guix shell' when the project has a `manifest.scm' and\nGuix is installed, which is how the Veritas sources ask to be run), then a\n`veritas' executable on `PATH', and finally the Veritas CLI module run with\nGuile, under `guix shell' when the project has a manifest, so that a project\nwhich keeps Veritas in its manifest and runs it with Guile is still run the way\nit intends, flags and all.\n\nThis may also be a function taking the project root and returning such a\nlist."
   :type '(choice (const :tag "Detect automatically" nil)
                  (repeat string)
                  (function :tag "Function of the project root"))
@@ -367,8 +367,22 @@
 
 ;;; Command resolution
 
+(defconst veritas--cli-program
+  "((@ (veritas cli) main) (cdr (command-line)))"
+  "Guile program that runs the Veritas CLI.\n\nThe CLI is a module, so a project that installs no `veritas' binary runs it the\nway the project's own `bin/veritas' does: Guile evaluates this with the CLI\nflags as its command line.")
+
+(defun veritas--guile-path (root)
+  "Return the `-L' flags that put ROOT's own Scheme modules on Guile's path.\n\nA project keeps its code in whichever of `src', `lib' or the root itself suits\nit and its tests under `veritas-test-top-dir', so all of them are offered; a\ndirectory that is not there is left out rather than passed as an empty entry."
+  (apply #'append
+         (mapcar (lambda (dir) (list "-L" dir))
+                 (seq-filter #'file-directory-p
+                             (list root
+                                   (expand-file-name "src" root)
+                                   (expand-file-name "lib" root)
+                                   (expand-file-name veritas-test-top-dir root))))))
+
 (defun veritas--default-command (root)
-  "Return the Veritas command to use inside ROOT.\n\nThe project's own `bin/veritas' wins, because it pins the Veritas version the\nproject is written against; it is wrapped in `guix shell -m manifest.scm' when\nthe project has a manifest and Guix is installed, since that is how the Veritas\nsources ask to be run and it is the only way the runner's fiber and JSON\ndependencies are guaranteed to be present."
+  "Return the Veritas command to use inside ROOT.\n\nThe project's own `bin/veritas' wins, because it pins the Veritas version the\nproject is written against; it is wrapped in `guix shell -m manifest.scm' when\nthe project has a manifest and Guix is installed, since that is how the Veritas\nsources ask to be run and it is the only way the runner's fiber and JSON\ndependencies are guaranteed to be present.\n\nFailing that a `veritas' executable on `PATH' is used, and failing that the\nVeritas CLI module run with Guile, under `guix shell' when the project has a\nmanifest.  That last case is a project which depends on the Veritas package in\nits own manifest and runs its tests with Guile: the flags stay the CLI's, and\nthe project's own directories go on the load path so the `use-modules' of its\ntests resolve."
   (let ((launcher (expand-file-name "bin/veritas" root))
         (manifest (expand-file-name "manifest.scm" root)))
     (cond
@@ -378,7 +392,11 @@
         (list launcher)))
      ((executable-find "veritas") (list "veritas"))
      ((executable-find "guile")
-      (list "guile" "-L" (expand-file-name "src" root)))
+      (append (when (and (executable-find "guix") (file-exists-p manifest))
+                (list "guix" "shell" "-m" manifest "--"))
+              (list "guile")
+              (veritas--guile-path root)
+              (list "-c" veritas--cli-program "--")))
      (t (list "veritas")))))
 
 (defun veritas--command (root)

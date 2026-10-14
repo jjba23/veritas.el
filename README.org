@@ -162,12 +162,19 @@ stops the run it belongs to.
 
 * How it finds the runner and the tests
 
-=veritas-command= defaults to =nil=, which means /detect/:
+=veritas-command= defaults to =nil=, which means /detect/, in this order:
 
 1. a =bin/veritas= inside the project, wrapped in =guix shell -m manifest.scm --
    ...= when the project has a manifest and Guix is installed (which is how the
-   Veritas sources ask to be run), otherwise run directly, and
-2. a =veritas= executable on =PATH=.
+   Veritas sources ask to be run), otherwise run directly,
+2. a =veritas= executable on =PATH=, and
+3. the Veritas CLI module run with Guile, under =guix shell= when the project
+   has a manifest: =guile -L ... -c '((@ (veritas cli) main) (cdr
+   (command-line)))' -- ...=.  That is how a project which depends on Veritas in
+   its own manifest, and runs its tests with =guile= rather than through an
+   installed =veritas=, is driven: the flags are still the CLI's, and the
+   project's =src=, =lib=, root and =test= directories go on the load path so
+   the =use-modules= of its own tests resolve.
 
 The flags follow the project layout: =--reporter json-reporter= for the
 structured report, =--test-type= (=veritas-test-type=), =--test-module=

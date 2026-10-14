@@ -297,6 +297,72 @@
     (should (member "--no-benchmarks" flags))
     (should-not (member "--benchmarks" flags))))
 
+(defmacro veritas-test--with-executables (present &rest body)
+  "Run BODY with `executable-find' answering only for the names in PRESENT."
+  (declare (indent 1) (debug t))
+  `(cl-letf (((symbol-function 'executable-find)
+              (lambda (name) (and (member name ',present)
+                                  (concat "/usr/bin/" name)))))
+     ,@body))
+
+(defun veritas-test--project (with-launcher)
+  "Make a throwaway project with a manifest and, when asked, a launcher."
+  (let ((root (make-temp-file "veritas-project-" t)))
+    (with-temp-file (expand-file-name "manifest.scm" root)
+      (insert "(packages->manifest (list guile-3.0-latest))\n"))
+    (make-directory (expand-file-name "test/veritas/unit" root) t)
+    (when with-launcher
+      (make-directory (expand-file-name "bin" root) t)
+      (let ((launcher (expand-file-name "bin/veritas" root)))
+        (with-temp-file launcher (insert "#!/bin/sh\nexit 0\n"))
+        (set-file-modes launcher #o755)))
+    root))
+
+(ert-deftest veritas-test-default-command-prefers-the-project-launcher ()
+  "A project's own `bin/veritas' is run, through Guix when it has a manifest."
+  (let ((root (veritas-test--project t)))
+    (unwind-protect
+        (progn
+          (veritas-test--with-executables ("guix" "veritas")
+            (should (equal (list "guix" "shell" "-m"
+                                 (expand-file-name "manifest.scm" root)
+                                 "--" (expand-file-name "bin/veritas" root))
+                           (veritas--default-command root))))
+          ;; Without Guix the launcher is used as it stands, and a `veritas'
+          ;; on PATH never takes its place.
+          (veritas-test--with-executables ("veritas")
+            (should (equal (list (expand-file-name "bin/veritas" root))
+                           (veritas--default-command root)))))
+      (delete-directory root t))))
+
+(ert-deftest veritas-test-default-command-uses-guile-for-the-cli ()
+  "A project without a launcher gets the CLI module, not bare Guile."
+  (let ((root (veritas-test--project nil)))
+    (unwind-protect
+        (progn
+          (veritas-test--with-executables ("guile" "guix")
+            (let ((command (veritas--default-command root)))
+              (should (equal "guix" (car command)))
+              (should (member "guile" command))
+              (should (equal (list "-c" veritas--cli-program "--")
+                             (last command 3)))
+              ;; The flags are never handed to Guile itself to parse.
+              (should-not (member "--reporter" command))
+              ;; The project's own directories are searchable, and the ones
+              ;; that are not there are left out.
+              (should (member root command))
+              (should (member (expand-file-name "test" root) command))
+              (should-not (member (expand-file-name "src" root) command))))
+          ;; Without a manifest there is no shell to enter, but the rest is
+          ;; the same.
+          (delete-file (expand-file-name "manifest.scm" root))
+          (veritas-test--with-executables ("guile" "guix")
+            (should (equal (list "guile" "-L" root "-L"
+                                 (expand-file-name "test" root)
+                                 "-c" veritas--cli-program "--")
+                           (veritas--default-command root)))))
+      (delete-directory root t))))
+
 (ert-deftest veritas-test-strip-selecting-flags ()
   "A rerun that selects something new drops the old selection."
   (should (equal '("--reporter" "json-reporter" "--no-shuffle")

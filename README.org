@@ -1,0 +1,245 @@
+#+title: veritas.el
+#+subtitle: Veritas in Emacs
+
+/PROBATIO IN EMACS/ - testing, understood and driven from Emacs
+
+=veritas.el= is an Emacs integration for [[https://jointhefreeworld.org][Veritas]], the Guile Scheme test
+framework.  It does three things:
+
+1. *It understands the vocabulary.*  =suite=, =test=, =benchmark=, =scenario=, the
+   BDD steps, the table helpers, the assertion names and the runner call are
+   fontified, indexed with Imenu, reported in the mode line by
+   =which-function-mode=, and are the unit every command acts on.
+2. *It runs them.*  From the project, the current file, or the test, suite, tag
+   or benchmark at point; from the keyboard, from a menu, or by clicking a name
+   in the report.
+3. *It reports better than the terminal.*  The report is a buffer, not a scroll:
+   failures come first, every name is a link to its definition, every line can be
+   run on its own, suites fold, and =next-error= walks the failures.
+
+* Understanding the source
+
+A Veritas file is read with a small Scheme-aware scanner, so what Emacs knows
+about a file is what the file really declares:
+
+- Every definition is found by its head keyword: =suite=, =describe=, =context=,
+  =scenario=, =feature=, =story=, =fabula=, =scaena=, =test=, =it=, =spec=,
+  =example=, =benchmark=, =test-each=, =suite-each=, and the BDD steps =given=,
+  =when-step=, =then=, =and-step=, =but-step= plus their =Given=/=Then= and Latin
+  spellings.
+- A name given as =#:name "... "= is read as that name, which is how =benchmark=
+  spells it.  A name computed at run time (=test-each= over a table, for example)
+  keeps whatever token stood in its place, so the definition is still visible and
+  runnable.
+- Forms inside strings and comments are not definitions, nesting follows paren
+  depth, and =#:skip? #t= is noticed and shown.
+- Because a scenario is a suite and a step is a test, the scanner nests them the
+  way Veritas runs them: a step is reported under its scenario, a test under its
+  suite, an assertion under its test.
+
+That understanding shows up in four places:
+
+- *Font lock*: the Veritas vocabulary is highlighted in any Scheme buffer where
+  =veritas-mode= is on, without disturbing =scheme-mode=.
+- *Imenu*: =veritas-imenu-create-index= gives the suite hierarchy, so
+  =imenu= (or =consult-imenu=, or the menu bar) lists a file's suites, tests and
+  benchmarks.
+- *Mode line*: =veritas-which-function= answers =which-function-mode= and
+  =add-log-current-defun= with the path of the definition at point, such as
+  =Math Suite › a deliberately failing test=.
+- *Point queries*: =veritas-node-at-point=, =veritas-node-in-line=,
+  =veritas-node-in-region=, =veritas-enclosing-nodes= and
+  =veritas-node-path= are the API the commands are built on, and they are yours
+  to build on too.
+
+Turn it on with =M-x veritas-mode=, or leave =veritas-auto-enable= at its
+default of =t= and every =scheme-mode= buffer inside a Veritas project gets it.
+
+* Running tests
+
+Every command is on =C-c v= (=veritas-dispatch=) and in the =Veritas= menu.
+With =transient= available that is a proper transient; without it, the same keys
+arrive through a prefix map, with the keys echoed in the minibuffer.
+
+| Key       | Command              | What it runs                            |
+|-----------+----------------------+-----------------------------------------|
+| =C-c C-a= | =veritas-run-all=    | every test of the project               |
+| =C-c C-f= | =veritas-run-file=   | the test file this buffer visits        |
+| =C-c C-t= | =veritas-run-here=   | the test, suite or benchmark at point   |
+| =a=       | =veritas-run-all=    | as above, from the menu                 |
+| =f=       | =veritas-run-file=   | as above, from the menu                 |
+| =t=       | =veritas-run-here=   | as above, from the menu                 |
+| =T=       | =veritas-run-test=   | a test, chosen by name                  |
+| =s=       | =veritas-run-suite=  | a suite, chosen by name                 |
+| =g=       | =veritas-run-tag=    | everything carrying a tag               |
+| =F=       | =veritas-run-failed= | what failed last time (=--only-failed=) |
+| =l=       | =veritas-run-last=   | the last command again                  |
+| =r=       | =veritas-run-raw=    | a run with the project's own reporter   |
+| =R=       | =veritas-show-report=| the report buffer                       |
+| =L=       | =veritas-show-log=   | the raw output of the run               |
+| =k=       | =veritas-kill=       | stop the run                            |
+
+A prefix argument means /skip the benchmarks/, which are the slow part of a run
+and the common case for a quick feedback loop: =C-u C-c C-t= runs what is at
+point without its benchmarks.
+
+Outside a definition =veritas-run-here= runs the file; outside a Veritas project
+the commands say so rather than guessing.
+
+The commands can also be clicked: every test name in the report goes to its
+definition on =mouse-1= and runs that definition on =mouse-3=, and the
+=[rerun]=, =[rerun failed]= and =[raw log]= links in the headline rerun what the
+report is showing.
+
+* The report
+
+The structured report is built from the runner's own JSON stream, cross-checked
+against the scanned sources, so the report knows both what ran and where it is
+written:
+
+#+begin_example
+Veritas  ✘ failed   [rerun] [rerun failed] [raw log]
+1 file · 4 tests · 1 benchmark · 4 assertions · 3 passed · 1 failed · 1 not run · 0.01s
+json-reporter · unit · ~/project
+$ veritas --reporter json-reporter --test-type unit --test-module veritas --no-shuffle
+
+Failures (1)
+  ✘ Math Suite › a deliberately failing test › a deliberately failing test
+     error, expect: 3, got: 2  ~/project/test/veritas/unit/demo.scm:27
+
+Files
+▾ ✘ demo.scm   3 passed, 1 failed, 1 not run
+  ▾ ✘ Math Suite   2 passed, 1 failed
+       ✔ addition works
+       ✔ subtraction works
+    ▾ ✘ a deliberately failing test  error, expect: 3, got: 2
+         ✘ 1 + 1 = 3, which fails  error, expect: 3, got: 2
+  ▾ ✔ String Suite   1 passed
+       ✔ concatenation
+     · summing a large list  0 runs
+
+The run itself reported
+  aborting due to error in test case...
+#+end_example
+
+What the buffer offers:
+
+- *Failures first*, each one with the runner's message and the =file:line= of
+  the definition, and =next-error= (=M-g n=) walking them, so a failure is one
+  keystroke from the code that caused it.
+- *Links everywhere*: =RET= on a name visits its definition, =mouse-1= does the
+  same, =mouse-3= runs just that test or suite.
+- *Folding*: =TAB= folds a suite or file, =v= hides the passed tests, =o= shows
+  the raw output a file or benchmark printed.
+- *Reruns*: =g= reruns what the buffer shows, =f= reruns only its failures, =R=
+  runs the test at point, =K= stops a run in progress.
+- *Provenance*: the headline names the reporter, the test type and module it ran
+  with, and =w= copies the command line to the kill ring.
+
+| Key   | Command                             |
+|-------+-------------------------------------|
+| =RET= | =veritas-results-goto-definition=   |
+| =TAB= | =veritas-results-toggle=            |
+| =g=   | =veritas-results-rerun-all=         |
+| =f=   | =veritas-results-rerun-failed=      |
+| =R=   | =veritas-results-run-node=          |
+| =n=   | =veritas-results-next=              |
+| =p=   | =veritas-results-previous=          |
+| =M-n= | =veritas-results-next-failure=      |
+| =M-p= | =veritas-results-previous-failure=  |
+| =v=   | =veritas-results-toggle-passed=     |
+| =o=   | =veritas-results-toggle-output=     |
+| =l=   | =veritas-results-show-log=          |
+| =w=   | =veritas-results-copy-command=      |
+| =K=   | =veritas-results-kill=              |
+| =q=   | =quit-window=                       |
+
+=veritas-show-report= decides when the report comes up: =on-failure= (the
+default) shows it only when something failed, =always= after every run, =never=
+only when you ask.  =veritas-pop-to-report= chooses whether showing it selects
+its window.  The report is redrawn in place as the stream arrives, and killing it
+stops the run it belongs to.
+
+* How it finds the runner and the tests
+
+=veritas-command= defaults to =nil=, which means /detect/:
+
+1. a =bin/veritas= inside the project, wrapped in =guix shell -m manifest.scm --
+   ...= when the project has a manifest and Guix is installed (which is how the
+   Veritas sources ask to be run), otherwise run directly, and
+2. a =veritas= executable on =PATH=.
+
+The flags follow the project layout: =--reporter json-reporter= for the
+structured report, =--test-type= (=veritas-test-type=), =--test-module=
+(=veritas-test-module=, detected from the single directory under the top dir when
+it is left at =veritas=), =--no-shuffle= (=veritas-shuffle=), =--benchmarks= or
+=--no-benchmarks= (=veritas-run-benchmarks=), plus =--jobs=, =--seed=,
+=--scan-dir=, =--partition= style extras in =veritas-run-flags= and
+=veritas-env=.
+
+Veritas cannot select a single file on its command line, so
+=veritas-file-run-restricted= (default =t=) makes =veritas-run-file= build a
+throwaway directory of symbolic links to just that file, run it there, and
+delete it afterwards.  The paths the runner reports are resolved back against
+=veritas-test-top-dir=/=veritas-test-module=/=veritas-test-type=, which is why
+those defaults have to agree with the project.
+
+* Installation
+
+Put the directory on =load-path= and require it:
+
+#+begin_src emacs-lisp
+(use-package veritas
+  :load-path "~/Hacking/veritas.el"
+  :commands (veritas-run-all veritas-run-file veritas-run-here
+             veritas-show-report veritas-dispatch)
+  :custom (veritas-show-report 'on-failure))
+#+end_src
+
+Only Emacs 27.1 and its bundled libraries are needed; =transient= is used when
+it is there.  Guile and Guix are needed only to actually run tests.
+
+* Customization
+
+| Variable                        | Default        | Meaning                                     |
+|---------------------------------+----------------+---------------------------------------------|
+| =veritas-command=               | =nil=          | Command that runs the CLI, or a function of the root. |
+| =veritas-run-flags=             | =nil=          | Extra flags for every run.                  |
+| =veritas-env=                   | =nil=          | Extra environment for every run.            |
+| =veritas-test-type=             | ="unit"=       | =--test-type=.                              |
+| =veritas-test-module=           | ="veritas"=    | =--test-module=.                            |
+| =veritas-test-top-dir=          | ="test"=       | Directory the runner reports paths against. |
+| =veritas-entrypoint=            | ="spec"=       | Entry point of a test file.                 |
+| =veritas-scan-dir=              | =nil=          | =--scan-dir=; the root when nil.            |
+| =veritas-jobs=                  | =nil=          | =--jobs=.                                   |
+| =veritas-seed=                  | =nil=          | =--seed=.                                   |
+| =veritas-shuffle=               | =nil=          | When non-nil, let the runner shuffle.       |
+| =veritas-run-benchmarks=        | =t=            | Whether benchmarks are run.                 |
+| =veritas-auto-enable=           | =t=            | Turn =veritas-mode= on in project buffers.  |
+| =veritas-show-report=           | =on-failure=   | =always=, =on-failure= or =never=.          |
+| =veritas-pop-to-report=         | =t=            | Select the report's window when showing it. |
+| =veritas-report-show-passed=    | =nil=          | Start with the passed tests shown.          |
+| =veritas-report-show-output=    | =nil=          | Start with raw output shown.                |
+| =veritas-report-buffer-name=    | ="*veritas*"=  | Report buffer.                              |
+| =veritas-log-buffer-name=       | ="*veritas log*"= | Raw output buffer.                       |
+| =veritas-raw-reporter=          | ="emoji-reporter"= | Reporter used by =veritas-run-raw=.      |
+| =veritas-mode-line-format=      | =" Veritas:%s"= | Mode line indicator; nil turns it off.     |
+
+* Development
+
+#+begin_src sh
+make compile   # byte-compile
+make test      # ERT
+make check     # both
+#+end_src
+
+Two of the tests run Veritas for real, against =test/fixture=, when
+=test/fixture= has a =bin/veritas= and Guix is installed; point
+=VERITAS_CHECKOUT= at a Veritas checkout to run its own =bin/veritas= instead.
+The rest run against a recorded stream in =test/data/= and a source fixture in
+=test/veritas-test.el=, so they work without Guile.
+
+* Licence
+
+Like Veritas itself, =veritas.el= is free software under the GNU Lesser General
+Public License, version 3 or later.  See =COPYING=.

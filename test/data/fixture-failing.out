@@ -1,0 +1,26 @@
+
+scanning directories for unit tests...
+scanning present working directory for unit tests...
+
+found unit tests: (demo.scm)
+
+
+running unit tests from file: demo.scm, entrypoint: spec
+
+
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"suite","message":"Math Suite"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"test","message":"addition works"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"assert","message":"2 + 2 = 4"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"pass","message":"got: 4"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"test","message":"subtraction works"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"assert","message":"3 - 1 = 2"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"pass","message":"got: 2"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"test","message":"a deliberately failing test"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"assert","message":"1 + 1 = 3, which fails"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"fail","message":"error, expect: 3, got: 2"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"suite","message":"String Suite"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"test","message":"concatenation"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"assert","message":"a + b = ab"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"pass","message":"got: ab"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"info","message":"ran 2 tasks in: 0 seconds, 8665 microseconds"}
+{"timestamp":"wo 14 okt 2026 19:38:57 CEST","level":"error","message":"\naborting due to error in test case...\n"}

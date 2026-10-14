@@ -1,0 +1,6 @@
+*.elc
+# Veritas writes its reports next to the project it runs in.
+reports/
+# Byte-compilation artefacts from running the tests by hand.
+/test/fixture/reports/
+*~

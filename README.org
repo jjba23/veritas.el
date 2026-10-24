@@ -19,6 +19,9 @@ framework.  It does three things:
    run on its own, suites fold, and =next-error= walks the failures.
 
 * Understanding the source
+:PROPERTIES:
+:CUSTOM_ID: understanding-the-source
+:END:
 
 A Veritas file is read with a small Scheme-aware scanner, so what Emacs knows
 about a file is what the file really declares:
@@ -57,28 +60,31 @@ Turn it on with =M-x veritas-mode=, or leave =veritas-auto-enable= at its
 default of =t= and every =scheme-mode= buffer inside a Veritas project gets it.
 
 * Running tests
+:PROPERTIES:
+:CUSTOM_ID: running-tests
+:END:
 
 Every command is on =C-c v= (=veritas-dispatch=) and in the =Veritas= menu.
 With =transient= available that is a proper transient; without it, the same keys
 arrive through a prefix map, with the keys echoed in the minibuffer.
 
-| Key       | Command              | What it runs                            |
-|-----------+----------------------+-----------------------------------------|
-| =C-c C-a= | =veritas-run-all=    | every test of the project               |
-| =C-c C-f= | =veritas-run-file=   | the test file this buffer visits        |
-| =C-c C-t= | =veritas-run-here=   | the test, suite or benchmark at point   |
-| =a=       | =veritas-run-all=    | as above, from the menu                 |
-| =f=       | =veritas-run-file=   | as above, from the menu                 |
-| =t=       | =veritas-run-here=   | as above, from the menu                 |
-| =T=       | =veritas-run-test=   | a test, chosen by name                  |
-| =s=       | =veritas-run-suite=  | a suite, chosen by name                 |
-| =g=       | =veritas-run-tag=    | everything carrying a tag               |
-| =F=       | =veritas-run-failed= | what failed last time (=--only-failed=) |
-| =l=       | =veritas-run-last=   | the last command again                  |
-| =r=       | =veritas-run-raw=    | a run with the project's own reporter   |
-| =R=       | =veritas-show-report=| the report buffer                       |
-| =L=       | =veritas-show-log=   | the raw output of the run               |
-| =k=       | =veritas-kill=       | stop the run                            |
+| Key       | Command               | What it runs                            |
+|-----------+-----------------------+-----------------------------------------|
+| =C-c C-a= | =veritas-run-all=     | every test of the project               |
+| =C-c C-f= | =veritas-run-file=    | the test file this buffer visits        |
+| =C-c C-t= | =veritas-run-here=    | the test, suite or benchmark at point   |
+| =a=       | =veritas-run-all=     | as above, from the menu                 |
+| =f=       | =veritas-run-file=    | as above, from the menu                 |
+| =t=       | =veritas-run-here=    | as above, from the menu                 |
+| =T=       | =veritas-run-test=    | a test, chosen by name                  |
+| =s=       | =veritas-run-suite=   | a suite, chosen by name                 |
+| =g=       | =veritas-run-tag=     | everything carrying a tag               |
+| =F=       | =veritas-run-failed=  | what failed last time (=--only-failed=) |
+| =l=       | =veritas-run-last=    | the last command again                  |
+| =r=       | =veritas-run-raw=     | a run with the project's own reporter   |
+| =R=       | =veritas-show-report= | the report buffer                       |
+| =L=       | =veritas-show-log=    | the raw output of the run               |
+| =k=       | =veritas-kill=        | stop the run                            |
 
 A prefix argument means /skip the benchmarks/, which are the slow part of a run
 and the common case for a quick feedback loop: =C-u C-c C-t= runs what is at
@@ -93,6 +99,9 @@ definition on =mouse-1= and runs that definition on =mouse-3=, and the
 report is showing.
 
 * The report
+:PROPERTIES:
+:CUSTOM_ID: the-report
+:END:
 
 The structured report is built from the runner's own JSON stream, cross-checked
 against the scanned sources, so the report knows both what ran and where it is
@@ -137,23 +146,23 @@ What the buffer offers:
 - *Provenance*: the headline names the reporter, the test type and module it ran
   with, and =w= copies the command line to the kill ring.
 
-| Key   | Command                             |
-|-------+-------------------------------------|
-| =RET= | =veritas-results-goto-definition=   |
-| =TAB= | =veritas-results-toggle=            |
-| =g=   | =veritas-results-rerun-all=         |
-| =f=   | =veritas-results-rerun-failed=      |
-| =R=   | =veritas-results-run-node=          |
-| =n=   | =veritas-results-next=              |
-| =p=   | =veritas-results-previous=          |
-| =M-n= | =veritas-results-next-failure=      |
-| =M-p= | =veritas-results-previous-failure=  |
-| =v=   | =veritas-results-toggle-passed=     |
-| =o=   | =veritas-results-toggle-output=     |
-| =l=   | =veritas-results-show-log=          |
-| =w=   | =veritas-results-copy-command=      |
-| =K=   | =veritas-results-kill=              |
-| =q=   | =quit-window=                       |
+| Key   | Command                            |
+|-------+------------------------------------|
+| =RET= | =veritas-results-goto-definition=  |
+| =TAB= | =veritas-results-toggle=           |
+| =g=   | =veritas-results-rerun-all=        |
+| =f=   | =veritas-results-rerun-failed=     |
+| =R=   | =veritas-results-run-node=         |
+| =n=   | =veritas-results-next=             |
+| =p=   | =veritas-results-previous=         |
+| =M-n= | =veritas-results-next-failure=     |
+| =M-p= | =veritas-results-previous-failure= |
+| =v=   | =veritas-results-toggle-passed=    |
+| =o=   | =veritas-results-toggle-output=    |
+| =l=   | =veritas-results-show-log=         |
+| =w=   | =veritas-results-copy-command=     |
+| =K=   | =veritas-results-kill=             |
+| =q=   | =quit-window=                      |
 
 =veritas-show-report= decides when the report comes up: =on-failure= (the
 default) shows it only when something failed, =always= after every run, =never=
@@ -162,6 +171,9 @@ its window.  The report is redrawn in place as the stream arrives, and killing i
 stops the run it belongs to.
 
 * How it finds the runner and the tests
+:PROPERTIES:
+:CUSTOM_ID: how-it-finds-the-runner-and-the-tests
+:END:
 
 =veritas-command= defaults to =nil=, which means /detect/, in this order:
 
@@ -218,7 +230,85 @@ delete it afterwards.  The paths the runner reports are resolved back against
 =veritas-test-top-dir=/=veritas-test-module=/=veritas-test-type=, which is why
 those defaults have to agree with the project.
 
+* Ways to install
+:PROPERTIES:
+:CUSTOM_ID: ways-to-install
+:END:
+
+/Four routes to the same 0.1.3, from the most automated to the most manual.  They all build the tag this README documents./
+
+** From the Guix channel
+:PROPERTIES:
+:CUSTOM_ID: from-the-guix-channel
+:END:
+*GNU Guix* is the functional package manager this project is developed with: a build is a pure function of its inputs, so the same recipe gives the same result everywhere, and an upgrade that goes wrong can be rolled back.
+
+The jointhefreeworld channel carries ~emacs-veritas~ at 0.1.3, so a checkout of the channel is enough — no package definition to write:
+
+#+begin_src shell
+git clone https://codeberg.org/jjba23/guix-jointhefreeworld.git
+guix install -L ./guix-jointhefreeworld emacs-veritas
+#+end_src
+
+Add the channel to ~$HOME/.config/guix/channels.scm~ (the channel's README has the four lines) and a plain ~guix install emacs-veritas~ keeps working on every later ~guix pull~.
+
+** From the Nix flake
+:PROPERTIES:
+:CUSTOM_ID: from-the-nix-flake
+:END:
+*Nix* offers the same declarative, reproducible model with its own language, its own store and a binary cache, and it is a natural fit if the rest of your machine is already described in Nix.
+
+The jointhefreeworld flake builds this project with this repository's own expression, so the package cannot drift from the source:
+
+#+begin_src shell
+nix build github:jjba23/nix-jointhefreeworld#emacs-veritas
+#+end_src
+
+The same attribute is available as an overlay, so ~pkgs.jointhefreeworld.emacs-veritas~ works inside a NixOS or home-manager configuration too.
+
+** As a container image
+:PROPERTIES:
+:CUSTOM_ID: as-a-container-image
+:END:
+*Podman or Docker* is the route that puts nothing on the host: the ~Dockerfile~ in this repository builds the project in a builder stage and copies only what it installed into a runtime stage, so the image is small and the host keeps its own toolchain untouched.
+
+#+begin_src shell
+podman build -t veritas-el .   # docker build -t veritas-el . also works
+podman run --rm -it veritas-el
+#+end_src
+
+The image's entry point is Emacs, with veritas.el installed and byte-compiled, which makes it useful for a quick try and for reproducing a bug on a clean system.
+
+** As a distribution package
+:PROPERTIES:
+:CUSTOM_ID: as-a-distribution-package
+:END:
+*Debian, openSUSE and Arch* each get the project through their own package manager.  Packaging lives in this repository under ~packaging/~ and is pinned to the same release tag, so the recipes and the sources they build are versioned together.
+
+None of the three archives ships veritas.el yet, so these are recipes to build rather than packages to install from a mirror:
+
+| Distribution   | Package         | How to build it                                                                     |
+|----------------+-----------------+-------------------------------------------------------------------------------------|
+| Debian, Ubuntu | ~elpa-veritas~  | copy ~packaging/debian~ to the repository root, then ~dpkg-buildpackage -us -uc -b~ |
+| openSUSE       | ~emacs-veritas~ | ~osc build~ with ~packaging/opensuse~                                               |
+| Arch           | ~emacs-veritas~ | ~makepkg -si~ in ~packaging/arch~                                                   |
+
+Each recipe carries its own dependency list, so a missing library fails the build with its name rather than producing a package that cannot load.
+
+** Which one?
+:PROPERTIES:
+:CUSTOM_ID: which-one
+:END:
+- *Guix* if you want the toolchain the project is tested with, and the ability to roll back a bad upgrade.
+- *Nix* if the rest of your machine is already declarative; the flake pins nixpkgs and gives you a binary cache.
+- *Container* if you only want to try the release, or reproduce a report on a machine that has nothing installed.
+- *Distribution package* if you want the project managed by the same tool as the rest of your system, with its licence, manual page and launcher in the usual places.
+
+
 * Installation
+:PROPERTIES:
+:CUSTOM_ID: installation
+:END:
 
 Put the directory on =load-path= and require it:
 
@@ -250,35 +340,41 @@ in
 #+end_src
 
 * Customization
+:PROPERTIES:
+:CUSTOM_ID: customization
+:END:
 
-| Variable                        | Default        | Meaning                                     |
-|---------------------------------+----------------+---------------------------------------------|
-| =veritas-command=               | =nil=          | Command that runs the CLI, or a function of the root. |
-| =veritas-checkout=              | =nil=          | Veritas source checkout to run when needed. |
-| =veritas-guile-load-path=       | =nil=          | Extra directories on Guile's load path.     |
-| =veritas-preflight=             | =t=            | Check the checkout imports before a run.    |
-| =veritas-run-flags=             | =nil=          | Extra flags for every run.                  |
-| =veritas-env=                   | =nil=          | Extra environment for every run.            |
-| =veritas-test-type=             | ="unit"=       | =--test-type=.                              |
-| =veritas-test-module=           | ="veritas"=    | =--test-module=.                            |
-| =veritas-test-top-dir=          | ="test"=       | Directory the runner reports paths against. |
-| =veritas-entrypoint=            | ="spec"=       | Entry point of a test file.                 |
-| =veritas-scan-dir=              | =nil=          | =--scan-dir=; the root when nil.            |
-| =veritas-jobs=                  | =nil=          | =--jobs=.                                   |
-| =veritas-seed=                  | =nil=          | =--seed=.                                   |
-| =veritas-shuffle=               | =nil=          | When non-nil, let the runner shuffle.       |
-| =veritas-run-benchmarks=        | =t=            | Whether benchmarks are run.                 |
-| =veritas-auto-enable=           | =t=            | Turn =veritas-mode= on in project buffers.  |
-| =veritas-show-report=           | =on-failure=   | =always=, =on-failure= or =never=.          |
-| =veritas-pop-to-report=         | =t=            | Select the report's window when showing it. |
-| =veritas-report-show-passed=    | =nil=          | Start with the passed tests shown.          |
-| =veritas-report-show-output=    | =nil=          | Start with raw output shown.                |
-| =veritas-report-buffer-name=    | ="*veritas*"=  | Report buffer.                              |
-| =veritas-log-buffer-name=       | ="*veritas log*"= | Raw output buffer.                       |
-| =veritas-raw-reporter=          | ="emoji-reporter"= | Reporter used by =veritas-run-raw=.      |
-| =veritas-mode-line-format=      | =" Veritas:%s"= | Mode line indicator; nil turns it off.     |
+| Variable                     | Default            | Meaning                                               |
+|------------------------------+--------------------+-------------------------------------------------------|
+| =veritas-command=            | =nil=              | Command that runs the CLI, or a function of the root. |
+| =veritas-checkout=           | =nil=              | Veritas source checkout to run when needed.           |
+| =veritas-guile-load-path=    | =nil=              | Extra directories on Guile's load path.               |
+| =veritas-preflight=          | =t=                | Check the checkout imports before a run.              |
+| =veritas-run-flags=          | =nil=              | Extra flags for every run.                            |
+| =veritas-env=                | =nil=              | Extra environment for every run.                      |
+| =veritas-test-type=          | ="unit"=           | =--test-type=.                                        |
+| =veritas-test-module=        | ="veritas"=        | =--test-module=.                                      |
+| =veritas-test-top-dir=       | ="test"=           | Directory the runner reports paths against.           |
+| =veritas-entrypoint=         | ="spec"=           | Entry point of a test file.                           |
+| =veritas-scan-dir=           | =nil=              | =--scan-dir=; the root when nil.                      |
+| =veritas-jobs=               | =nil=              | =--jobs=.                                             |
+| =veritas-seed=               | =nil=              | =--seed=.                                             |
+| =veritas-shuffle=            | =nil=              | When non-nil, let the runner shuffle.                 |
+| =veritas-run-benchmarks=     | =t=                | Whether benchmarks are run.                           |
+| =veritas-auto-enable=        | =t=                | Turn =veritas-mode= on in project buffers.            |
+| =veritas-show-report=        | =on-failure=       | =always=, =on-failure= or =never=.                    |
+| =veritas-pop-to-report=      | =t=                | Select the report's window when showing it.           |
+| =veritas-report-show-passed= | =nil=              | Start with the passed tests shown.                    |
+| =veritas-report-show-output= | =nil=              | Start with raw output shown.                          |
+| =veritas-report-buffer-name= | ="*veritas*"=      | Report buffer.                                        |
+| =veritas-log-buffer-name=    | ="*veritas log*"=  | Raw output buffer.                                    |
+| =veritas-raw-reporter=       | ="emoji-reporter"= | Reporter used by =veritas-run-raw=.                   |
+| =veritas-mode-line-format=   | =" Veritas:%s"=    | Mode line indicator; nil turns it off.                |
 
 * Development
+:PROPERTIES:
+:CUSTOM_ID: development
+:END:
 
 The tasks are run with [[https://codeberg.org/jjba23/maak][Maak]], the command runner of the sibling
 projects, so =maak --list= says what there is and =maak -- check= does the
@@ -304,6 +400,9 @@ and a source fixture in =test/veritas-test.el=, so they need neither Guile nor a
 network.
 
 * Licence
+:PROPERTIES:
+:CUSTOM_ID: licence
+:END:
 
 Like Veritas itself, =veritas.el= is free software under the GNU Lesser General
 Public License, version 3 or later.  See =COPYING=.

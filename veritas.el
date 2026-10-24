@@ -4,7 +4,7 @@
 
 ;; Author: Josep Bigorra <jjbigorra@gmail.com>
 ;; Maintainer: Josep Bigorra <jjbigorra@gmail.com>
-;; Version: 0.1.3
+;; Version: 0.1.4
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: tools, lisp, scheme, languages
 ;; Homepage: https://jointhefreeworld.org
@@ -64,7 +64,7 @@
 ;; scanner aware of Scheme strings and comments.
 (require 'scheme)
 
-(defconst veritas-version "0.1.0"
+(defconst veritas-version "0.1.4"
   "Version of this package.")
 
 (defgroup veritas nil

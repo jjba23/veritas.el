@@ -27,7 +27,7 @@ depends=('emacs')
 makedepends=('emacs')
 checkdepends=('emacs')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('e291a74a6e3dbb23cf31762f314982ed720337d9df872385c08fbb8d7028561c')
+sha256sums=('30f52ad54fc406784529583f8e167199d8485ebf7a79beb57605461a55b18f35')
 
 build() {
   cd "$srcdir/veritas.el"

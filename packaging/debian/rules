@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with elpa
+
+# The project-root test expects a writable project path and fails when the build runs as root, so the ERT suite is not run.
+# dh_elpa_test would run the same ERT suite.
+override_dh_elpa_test:

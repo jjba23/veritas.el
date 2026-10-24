@@ -4,7 +4,7 @@
 
 ;; Author: Josep Bigorra <jjbigorra@gmail.com>
 ;; Maintainer: Josep Bigorra <jjbigorra@gmail.com>
-;; Version: 0.1.2
+;; Version: 0.1.3
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: tools, lisp, scheme, languages
 ;; Homepage: https://jointhefreeworld.org

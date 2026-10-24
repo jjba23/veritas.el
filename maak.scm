@@ -88,6 +88,20 @@
   "List the available tasks."
   ($ '("maak --list")))
 
+;; ====== Container tasks ======
+
+(define (container-build)
+  "Build the container image for veritas-el."
+  ($ '("podman build -t veritas-el .")))
+
+(define (container-run)
+  "Run the container image for veritas-el."
+  ($ '("podman run --rm -it veritas-el:latest")))
+
+(define (package-docker)
+  "Build the container image for veritas-el."
+  (container-build))
+
 ;; Local Variables:
 ;; mode: scheme
 ;; End:

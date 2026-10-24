@@ -1,0 +1,21 @@
+Source: elpa-veritas
+Section: lisp
+Priority: optional
+Maintainer: Josep Bigorra <jjbigorra@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-elpa,
+ emacs-nox
+Standards-Version: 4.6.2
+Homepage: https://codeberg.org/jjba23/veritas.el
+Vcs-Git: https://codeberg.org/jjba23/veritas.el.git
+Vcs-Browser: https://codeberg.org/jjba23/veritas.el
+Rules-Requires-Root: no
+
+Package: elpa-veritas
+Architecture: all
+Depends: ${misc:Depends}, ${elpa:Depends}, emacs
+Description: Emacs integration for the Veritas test framework
+ Veritas.el teaches Emacs the language of a Veritas suite (font-lock, Imenu,
+ which-function) and runs the Veritas CLI for the project, file, test or
+ suite at point.

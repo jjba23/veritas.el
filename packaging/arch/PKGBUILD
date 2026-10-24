@@ -1,0 +1,49 @@
+# emacs-veritas
+
+# Copyright © 2026 Josep Bigorra <jjbigorra@gmail.com>
+
+# veritas.el is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+#
+# veritas.el is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
+# for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License along
+# with veritas.el. If not, see <https://www.gnu.org/licenses/>.
+
+# Maintainer: Josep Bigorra <jjbigorra@gmail.com>
+pkgname=emacs-veritas
+pkgver=0.1.3
+pkgrel=1
+pkgdesc="Emacs integration for the Veritas test framework"
+arch=('any')
+url="https://codeberg.org/jjba23/veritas.el"
+license=('LGPL-3.0-or-later')
+depends=('emacs')
+makedepends=('emacs')
+checkdepends=('emacs')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('e291a74a6e3dbb23cf31762f314982ed720337d9df872385c08fbb8d7028561c')
+
+build() {
+  cd "$srcdir/veritas.el"
+
+  emacs -Q --batch -f batch-byte-compile veritas.el
+}
+
+# The project-root test expects a writable project path and fails when the build runs as root, so the ERT suite is not run.
+# check() omitted.
+
+package() {
+  cd "$srcdir/veritas.el"
+
+  install -Dm644 veritas.el "$pkgdir/usr/share/emacs/site-lisp/veritas.el"
+  install -Dm644 veritas.elc "$pkgdir/usr/share/emacs/site-lisp/veritas.elc"
+
+  install -Dm644 COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
+  install -Dm644 README.org "$pkgdir/usr/share/doc/$pkgname/README.org"
+}

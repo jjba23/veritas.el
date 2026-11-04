@@ -2,6 +2,9 @@
 #+subtitle: Veritas in Emacs
 #+options: toc:nil
 
+#+attr_html: :width 160 :alt veritas.el logo
+[[file:logo.svg]]
+
 /PROBATIO IN EMACS/ - testing, understood and driven from Emacs
 
 =veritas.el= is an Emacs integration for [[https://jointhefreeworld.org][Veritas]], the Guile Scheme test
@@ -303,7 +306,6 @@ Each recipe carries its own dependency list, so a missing library fails the buil
 - *Nix* if the rest of your machine is already declarative; the flake pins nixpkgs and gives you a binary cache.
 - *Container* if you only want to try the release, or reproduce a report on a machine that has nothing installed.
 - *Distribution package* if you want the project managed by the same tool as the rest of your system, with its licence, manual page and launcher in the usual places.
-
 
 * Installation
 :PROPERTIES:

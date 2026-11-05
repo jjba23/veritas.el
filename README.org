@@ -249,7 +249,7 @@ those defaults have to agree with the project.
 The jointhefreeworld channel carries ~emacs-veritas~ at 0.1.3, so a checkout of the channel is enough — no package definition to write:
 
 #+begin_src shell
-git clone https://codeberg.org/jjba23/guix-jointhefreeworld.git
+git clone https://github.com/jjba23/guix-jointhefreeworld.git
 guix install -L ./guix-jointhefreeworld emacs-veritas
 #+end_src
 
@@ -329,7 +329,7 @@ project asks for it --- through its own =bin/veritas= or its manifest.
 It is also packaged with Nix.  This repository carries the expression itself,
 =default.nix= next to =veritas.el=, so =nix-build= in this checkout builds the
 package; and it is part of
-[[https://codeberg.org/jjba23/nix-jointhefreeworld][nix-jointhefreeworld]], the
+[[https://github.com/jjba23/nix-jointhefreeworld][nix-jointhefreeworld]], the
 set of Nix packages for everything Jointhefreeworld.  The set's =emacsOverlay=
 adds it to =emacsPackages=, byte-compiled and with its autoloads, so an Emacs
 that Nix builds gets it the way it gets any other package:
@@ -378,7 +378,7 @@ in
 :CUSTOM_ID: development
 :END:
 
-The tasks are run with [[https://codeberg.org/jjba23/maak][Maak]], the command runner of the sibling
+The tasks are run with [[https://github.com/jjba23/maak][Maak]], the command runner of the sibling
 projects, so =maak --list= says what there is and =maak -- check= does the
 whole thing:
 

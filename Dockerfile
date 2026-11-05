@@ -37,7 +37,7 @@ ENV LANG=C.UTF-8 \
 
 LABEL org.opencontainers.image.title="veritas-el" \
       org.opencontainers.image.description="Emacs integration for the Veritas test framework" \
-      org.opencontainers.image.url="https://codeberg.org/jjba23/veritas.el" \
+      org.opencontainers.image.url="https://github.com/jjba23/veritas.el" \
       org.opencontainers.image.licenses="LGPL-3.0-or-later" \
       org.opencontainers.image.version="${VERSION}"
 

@@ -60,7 +60,7 @@ melpaBuild {
 
   meta = {
     description = "Tight Emacs integration for the Veritas test framework";
-    homepage = "https://codeberg.org/jjba23/veritas.el";
+    homepage = "https://github.com/jjba23/veritas.el";
     license = lib.licenses.lgpl3Plus;
     maintainers = [ lib.maintainers.jjba23 ];
   };

@@ -1,55 +1,42 @@
 ;;; veritas.el --- Tight Emacs integration for the Veritas test framework -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2026  Josep Bigorra <jjbigorra@gmail.com>
+;;; Copyright (C) 2026  Josep Bigorra <jjbigorra@gmail.com>
 
-;; Author: Josep Bigorra <jjbigorra@gmail.com>
-;; Maintainer: Josep Bigorra <jjbigorra@gmail.com>
-;; Version: 0.1.4
-;; Package-Requires: ((emacs "27.1"))
-;; Keywords: tools, lisp, scheme, languages
-;; Homepage: https://jointhefreeworld.org
+;;; Author: Josep Bigorra <jjbigorra@gmail.com>
+;;; Maintainer: Josep Bigorra <jjbigorra@gmail.com>
+;;; Version: 0.1.4
+;;; Package-Requires: ((emacs "27.1"))
+;;; Keywords: tools, lisp, scheme, languages
+;;; Homepage: https://jointhefreeworld.org
 
-;; This file is not part of GNU Emacs.
-
-;; veritas.el is free software: you can redistribute it and/or modify it under
-;; the terms of the GNU Lesser General Public License as published by the Free
-;; Software Foundation, either version 3 of the License, or (at your option) any
-;; later version.
-
-;; veritas.el is distributed in the hope that it will be useful, but WITHOUT ANY
-;; WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-;; A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
-;; details.
-
-;; You should have received a copy of the GNU Lesser General Public License
-;; along with veritas.el.  If not, see <https://www.gnu.org/licenses/>.
+;;; SPDX-License-Identifier: MIT
 
 ;;; Commentary:
 
-;; This package gives Emacs a tight understanding of Veritas, the Guile Scheme
-;; testing framework (see the Veritas manual, README.org in the Veritas
-;; sources).  It does three things:
-;;
-;; 1. It teaches Emacs the language of a Veritas suite: `suite', `test',
-;;    `benchmark', `scenario' and their BDD, table, container, double and
-;;    snapshot companions are fontified, appear in the Imenu index, drive
-;;    `which-function-mode', and can be run from point.
-;;
-;; 2. It runs the Veritas CLI for you, from the project, the current file, the
-;;    test, suite, tag or benchmark at point, or just what failed last time.
-;;
-;; 3. It reports the run in a dedicated buffer that is built from the runner's
-;;    JSON event stream and cross-referenced with the sources: every test and
-;;    assertion is a link to its own definition, failures are collected at the
-;;    top with their expected/got detail, tests that did not run are shown as
-;;    such, and the whole thing is navigable with `next-error'.
-;;
-;; The runner is invoked with its `json-reporter', which is what makes the
-;; structured report possible; `veritas-run-raw' runs the project's own
-;; reporter instead and shows its output in a plain log buffer.
-;;
-;; Use `veritas-dispatch' (bound to `C-c v' in Veritas buffers) or the
-;; individual `veritas-run-*' commands.
+;;; This package gives Emacs a tight understanding of Veritas, the Guile Scheme
+;;; testing framework (see the Veritas manual, README.org in the Veritas
+;;; sources).  It does three things:
+;;;
+;;; 1. It teaches Emacs the language of a Veritas suite: `suite', `test',
+;;; `benchmark', `scenario' and their BDD, table, container, double and
+;;; snapshot companions are fontified, appear in the Imenu index, drive
+;;; `which-function-mode', and can be run from point.
+;;;
+;;; 2. It runs the Veritas CLI for you, from the project, the current file, the
+;;; test, suite, tag or benchmark at point, or just what failed last time.
+;;;
+;;; 3. It reports the run in a dedicated buffer that is built from the runner's
+;;; JSON event stream and cross-referenced with the sources: every test and
+;;; assertion is a link to its own definition, failures are collected at the
+;;; top with their expected/got detail, tests that did not run are shown as
+;;; such, and the whole thing is navigable with `next-error'.
+;;;
+;;; The runner is invoked with its `json-reporter', which is what makes the
+;;; structured report possible; `veritas-run-raw' runs the project's own
+;;; reporter instead and shows its output in a plain log buffer.
+;;;
+;;; Use `veritas-dispatch' (bound to `C-c v' in Veritas buffers) or the
+;;; individual `veritas-run-*' commands.
 
 ;;; Code:
 
@@ -60,8 +47,8 @@
 (require 'imenu)
 (require 'easymenu)
 (require 'simple)
-;; Needed for `scheme-mode-syntax-table', which is what makes the definition
-;; scanner aware of Scheme strings and comments.
+;;; Needed for `scheme-mode-syntax-table', which is what makes the definition
+;;; scanner aware of Scheme strings and comments.
 (require 'scheme)
 
 (defconst veritas-version "0.1.4"
@@ -316,23 +303,23 @@
 (defun veritas--json-read (string)
   "Parse the JSON object in STRING, returning an alist of symbols, or nil."
   (condition-case nil
-      (if (fboundp 'json-parse-string)
-          (json-parse-string string :object-type 'alist :array-type 'list
-                             :null-object nil :false-object nil)
-        ;; `json-parse-string' needs native JSON support, so keep a path for
-        ;; older builds that have only the Lisp reader.
-        (let ((json-object-type 'alist)
-              (json-array-type 'list)
-              (json-null nil)
-              (json-false nil))
-          (json-read-from-string string)))
+    (if (fboundp 'json-parse-string)
+      (json-parse-string string :object-type 'alist :array-type 'list
+                         :null-object nil :false-object nil)
+      ;; `json-parse-string' needs native JSON support, so keep a path for
+      ;; older builds that have only the Lisp reader.
+      (let ((json-object-type 'alist)
+            (json-array-type 'list)
+            (json-null nil)
+            (json-false nil))
+        (json-read-from-string string)))
     (error nil)))
 
 ;;; Project detection
-;;
-;; A buffer belongs to a Veritas project when one of its parent directories
-;; holds the runner's launcher, a `.veritas' marker, or the test hierarchy the
-;; runner would discover.
+;;;
+;;; A buffer belongs to a Veritas project when one of its parent directories
+;;; holds the runner's launcher, a `.veritas' marker, or the test hierarchy the
+;;; runner would discover.
 
 (defun veritas--test-layout (&optional root)
   "Return the test layout of the project at ROOT as (BASE . MODULE), or nil.\n\nBASE is the directory the runner's discovered paths are relative to, that is\n`TEST_TOP_DIR/TEST_MODULE/TEST_TYPE' inside ROOT, and MODULE is the module\nprefix actually found, which is `veritas-test-module' unless the project has a\nsingle directory under `veritas-test-top-dir' and that name differs."
@@ -357,15 +344,15 @@
 
 (defun veritas-project-p (dir)
   "Return non-nil when DIR looks like a Veritas project."
-  (let ((dir (file-name-as-directory (expand-file-name dir))))
+  (let* ((dir (file-name-as-directory (expand-file-name dir))))
     (or (file-exists-p (expand-file-name "bin/veritas" dir))
         (file-exists-p (expand-file-name ".veritas" dir))
         (and (veritas--test-layout dir) t))))
 
 (defun veritas-project-root (&optional dir)
   "Return the root of the Veritas project containing DIR, or nil.\n\nDIR defaults to `default-directory'.  The search walks up from DIR, so a test\nfile, a suite and the repository root all resolve to the same project."
-  (let ((dir (file-name-as-directory
-              (expand-file-name (or dir default-directory)))))
+  (let* ((dir (file-name-as-directory
+               (expand-file-name (or dir default-directory)))))
     (cl-loop for candidate = dir then (file-name-directory
                                        (directory-file-name candidate))
              while (and candidate (not (string-empty-p candidate)))
@@ -397,7 +384,7 @@
 
 (defun veritas--checkout-directory (dir)
   "Return the load path directory of the Veritas checkout in DIR, or nil.\n\nA checkout keeps its modules under `src', which is what its own `bin/veritas'\nputs on the path; one laid out another way is taken as it stands."
-  (let ((dir (expand-file-name dir)))
+  (let* ((dir (expand-file-name dir)))
     (cond ((file-exists-p (expand-file-name "src/veritas/cli.scm" dir))
            (expand-file-name "src" dir))
           ((file-exists-p (expand-file-name "veritas/cli.scm" dir))
@@ -441,7 +428,7 @@
                                              (getenv "GUILE_LOAD_PATH")))
                              ":")))
     (if (string-empty-p value)
-        env
+      env
       (cons (cons "GUILE_LOAD_PATH" value)
             (seq-remove (lambda (pair) (equal (car pair) "GUILE_LOAD_PATH"))
                         env)))))
@@ -451,20 +438,20 @@
   (let ((launcher (expand-file-name "bin/veritas" root))
         (manifest (expand-file-name "manifest.scm" root)))
     (cond
-     ((file-executable-p launcher)
-      (if (veritas--manifest-p root)
-          (list "guix" "shell" "-m" manifest "--" launcher)
-        (list launcher)))
-     ((executable-find "veritas") (list "veritas"))
-     ((executable-find "guile")
-      ;; `-L' entries win over the load path of the environment, so a checkout
-      ;; from beside the project is used when the manifest is not providing one.
-      (append (when (veritas--manifest-p root)
-                (list "guix" "shell" "-m" manifest "--"))
-              (list "guile")
-              (veritas--guile-path root (not (veritas--manifest-p root)))
-              (list "-c" veritas--cli-program "--")))
-     (t (list "veritas")))))
+      ((file-executable-p launcher)
+       (if (veritas--manifest-p root)
+         (list "guix" "shell" "-m" manifest "--" launcher)
+         (list launcher)))
+      ((executable-find "veritas") (list "veritas"))
+      ((executable-find "guile")
+       ;; `-L' entries win over the load path of the environment, so a checkout
+       ;; from beside the project is used when the manifest is not providing one.
+       (append (when (veritas--manifest-p root)
+                 (list "guix" "shell" "-m" manifest "--"))
+               (list "guile")
+               (veritas--guile-path root (not (veritas--manifest-p root)))
+               (list "-c" veritas--cli-program "--")))
+      (t (list "veritas")))))
 
 (defun veritas--command (root)
   "Return the command list to run Veritas inside ROOT."
@@ -503,23 +490,21 @@
   "Return a sentence saying why a preflight probe that printed OUTPUT failed.\n\nA module Guile could not find is named for what it is: one of the library's own\nmodules means the checkout is not on the load path, and anything else is a\ndependency of the library, such as the fibers the runner needs."
   (let* ((lines (reverse (split-string output "\n" t)))
          (missing (seq-find #'veritas--missing-module lines)))
-    (if (not missing)
-        (format "Guile could not load the Veritas CLI: %s"
-                (or (seq-find (lambda (line) (not (string-empty-p (string-trim line))))
-                              lines)
-                    "it said nothing at all"))
-      (let ((module (veritas--missing-module missing)))
-        (if (string-prefix-p "veritas" module)
-            (format (concat "Guile cannot find the module (%s): a checkout of "
-                            "the Veritas sources has to be on its load path, "
-                            "through veritas-checkout or "
-                            "veritas-guile-load-path")
-                    module)
-          (format (concat "Guile cannot find the module (%s), which the "
-                          "Veritas runner needs: install it for this Guile, "
-                          "or name the directory it is in with "
-                          "veritas-guile-load-path")
-                  module))))))
+    (unless missing (format "Guile could not load the Veritas CLI: %s"
+                            (or (seq-find (lambda (line) (not (string-empty-p (string-trim line))))
+                                          lines)
+                                "it said nothing at all")) (let ((module (veritas--missing-module missing)))
+                                                             (if (string-prefix-p "veritas" module)
+                                                               (format (concat "Guile cannot find the module (%s): a checkout of "
+                                                                               "the Veritas sources has to be on its load path, "
+                                                                               "through veritas-checkout or "
+                                                                               "veritas-guile-load-path")
+                                                                       module)
+                                                               (format (concat "Guile cannot find the module (%s), which the "
+                                                                               "Veritas runner needs: install it for this Guile, "
+                                                                               "or name the directory it is in with "
+                                                                               "veritas-guile-load-path")
+                                                                       module))))))
 
 (defun veritas--preflight (root command extra-env)
   "Return the reasons COMMAND cannot run Veritas in ROOT, as a list of strings.\n\nAn empty list means the run looks possible: the program is there, a checkout\nnamed through `veritas-checkout' is a checkout, and, when the command drives\nthe CLI module with Guile, that Guile can import it and everything it needs."
@@ -552,7 +537,7 @@
   "Return the CLI flags for a run in ROOT.\n\nEXTRA is appended last, so it can override what came before.  When\nNO-BENCHMARKS is non-nil the benchmarks are skipped whatever\n`veritas-run-benchmarks' says."
   (let ((layout (veritas--test-layout root))
         (benchmarks (if (or no-benchmarks (not veritas-run-benchmarks))
-                        "--no-benchmarks" "--benchmarks")))
+                      "--no-benchmarks" "--benchmarks")))
     (append (list "--reporter" "json-reporter"
                   "--test-type" veritas-test-type
                   "--test-top-dir" veritas-test-top-dir
@@ -599,11 +584,11 @@
               tmp)))))
 
 ;;; The source model
-;;
-;; A Veritas source file is read into a tree of nodes, one per `suite',
-;; `test', `benchmark' and so on.  Names and line numbers come from the tree
-;; itself, which is what lets the report link back to a definition and lets
-;; Imenu, `which-function-mode' and "run what is at point" share one parser.
+;;;
+;;; A Veritas source file is read into a tree of nodes, one per `suite',
+;;; `test', `benchmark' and so on.  Names and line numbers come from the tree
+;;; itself, which is what lets the report link back to a definition and lets
+;;; Imenu, `which-function-mode' and "run what is at point" share one parser.
 
 (defconst veritas--group-keywords
   '("suite" "scenario" "feature" "story" "fabula" "scaena"
@@ -633,29 +618,29 @@
   "Regular expression matching the head of a Veritas definition.\n\n`regexp-opt' puts the longest names first, so `test-each' is never read as\n`test', and outlines each name with symbol boundaries, so a name inside another\nword never matches.  Group 1 is the keyword.")
 
 (cl-defstruct (veritas-node (:constructor veritas--make-node) (:copier nil))
-              "A test, suite, benchmark or assertion."
-              (type 'test :documentation "Source keyword, or `assert' for an assertion.")
-              (name "" :documentation "The name the runner reports it under.")
-              (status 'unknown :documentation "One of pass, fail, error, skip, not-run, running.")
-              (start nil :documentation "Start of the form, as a buffer position of the scan.")
-              (end nil :documentation "End of the form, as a buffer position of the scan.")
-              (line nil :documentation "Line of the form, counted from one.")
-              (depth 0 :documentation "Paren depth of the definition, for nesting.")
-              (skip nil :documentation "Non-nil when the source declares `#:skip? #t'.")
-              (file nil :documentation "Absolute path of the file the node came from.")
-              (children nil :documentation "Nested groups, tests and assertions.")
-              (parent nil :documentation "The enclosing node, or nil.")
-              (collapsed nil :documentation "Non-nil when the report folds this group.")
-              (matched nil :documentation "Non-nil once a result has been attached to it.")
-              (messages nil :documentation "The pass/fail messages reported for it.")
-              (output "" :documentation "Raw output the runner printed for it.")
-              (duration nil :documentation "Seconds the runner reported for the file."))
+  "A test, suite, benchmark or assertion."
+  (type 'test :documentation "Source keyword, or `assert' for an assertion.")
+  (name "" :documentation "The name the runner reports it under.")
+  (status 'unknown :documentation "One of pass, fail, error, skip, not-run, running.")
+  (start nil :documentation "Start of the form, as a buffer position of the scan.")
+  (end nil :documentation "End of the form, as a buffer position of the scan.")
+  (line nil :documentation "Line of the form, counted from one.")
+  (depth 0 :documentation "Paren depth of the definition, for nesting.")
+  (skip nil :documentation "Non-nil when the source declares `#:skip? #t'.")
+  (file nil :documentation "Absolute path of the file the node came from.")
+  (children nil :documentation "Nested groups, tests and assertions.")
+  (parent nil :documentation "The enclosing node, or nil.")
+  (collapsed nil :documentation "Non-nil when the report folds this group.")
+  (matched nil :documentation "Non-nil once a result has been attached to it.")
+  (messages nil :documentation "The pass/fail messages reported for it.")
+  (output "" :documentation "Raw output the runner printed for it.")
+  (duration nil :documentation "Seconds the runner reported for the file."))
 
 (cl-defstruct (veritas-source (:constructor veritas--make-source) (:copier nil))
-              "The definitions of one file."
-              (file nil :documentation "Absolute path, or nil for an unsaved buffer.")
-              (nodes nil :documentation "Top level definitions, in source order.")
-              (index nil :documentation "Hash of definition name to a list of nodes."))
+  "The definitions of one file."
+  (file nil :documentation "Absolute path, or nil for an unsaved buffer.")
+  (nodes nil :documentation "Top level definitions, in source order.")
+  (index nil :documentation "Hash of definition name to a list of nodes."))
 
 (defun veritas--in-string-or-comment-p (position)
   "Return non-nil when POSITION sits inside a string, comment or char literal."
@@ -665,18 +650,18 @@
 (defun veritas--read-name (&optional limit)
   "Return the name at point, advancing past it, or nil.\n\nA string literal is read as a string and anything else as a bare token, which\nis what a name computed at run time looks like."
   (cond
-   ((looking-at "\"")
-    (condition-case nil
-        (progn (forward-sexp 1)
-               (let* ((start (save-excursion (backward-sexp 1) (point)))
-                      (raw (buffer-substring-no-properties start (point))))
-                 (condition-case nil (read raw) (error raw))))
-      (error nil)))
-   ((looking-at "[^ \t\n()\"]")
-    (let ((start (point)))
-      (skip-chars-forward "^ \t\n()\"" limit)
-      (buffer-substring-no-properties start (point))))
-   (t nil)))
+    ((looking-at "\"")
+     (condition-case nil
+       (progn (forward-sexp 1)
+         (let* ((start (save-excursion (backward-sexp 1) (point)))
+                (raw (buffer-substring-no-properties start (point))))
+           (condition-case nil (read raw) (error raw))))
+       (error nil)))
+    ((looking-at "[^ \t\n()\"]")
+     (let ((start (point)))
+       (skip-chars-forward "^ \t\n()\"" limit)
+       (buffer-substring-no-properties start (point))))
+    (t nil)))
 
 (defun veritas--form-name (start end)
   "Return the name of the Veritas form between START and END, or nil.\n\nThe name is the string that follows the form's head, or the value of a\n`#:name' argument, which is how `benchmark' spells it."
@@ -692,20 +677,20 @@
         (while (and (< (point) end) (> (setq budget (1- budget)) 0))
           (skip-chars-forward " \t\n" end)
           (cond
-           ((>= (point) end) (throw 'name nil))
-           ((looking-at "#:\\([[:alnum:]?!*<>=+/-]+\\)")
-            (let ((key (match-string-no-properties 1)))
-              (goto-char (match-end 0))
-              (skip-chars-forward " \t\n" end)
-              (if (string-equal key "name")
-                  (throw 'name (veritas--read-name end))
-                ;; Skip the value that belongs to this keyword.
-                (goto-char (or (ignore-errors (scan-sexps (point) 1)) end)))))
-           ((looking-at "\"")
-            (throw 'name (veritas--read-name end)))
-           ((looking-at "[)'`]")
-            (throw 'name nil))
-           (t (goto-char (or (ignore-errors (scan-sexps (point) 1)) end)))))))))
+            ((>= (point) end) (throw 'name nil))
+            ((looking-at "#:\\([[:alnum:]?!*<>=+/-]+\\)")
+             (let ((key (match-string-no-properties 1)))
+               (goto-char (match-end 0))
+               (skip-chars-forward " \t\n" end)
+               (if (string-equal key "name")
+                 (throw 'name (veritas--read-name end))
+                 ;; Skip the value that belongs to this keyword.
+                 (goto-char (or (ignore-errors (scan-sexps (point) 1)) end)))))
+            ((looking-at "\"")
+             (throw 'name (veritas--read-name end)))
+            ((looking-at "[)'`]")
+             (throw 'name nil))
+            (t (goto-char (or (ignore-errors (scan-sexps (point) 1)) end)))))))))
 
 (defun veritas--scan-buffer (&optional file)
   "Return a `veritas-source' for the current buffer.\n\nFILE is recorded on the nodes so the report can jump to them.  A definition\nwhose name cannot be read, such as one produced by a table, is still recorded,\nwith whatever token stood in the name's place."
@@ -757,7 +742,7 @@
         (let ((parent (car stack)))
           (setf (veritas-node-parent node) parent)
           (if parent
-              (push node (veritas-node-children parent))
+            (push node (veritas-node-children parent))
             (push node roots))
           (push node stack)
           (puthash (veritas-node-name node)
@@ -778,7 +763,7 @@
                           (file-attributes file))
                          (current-time))))
     (if (and cached (equal (car cached) write-time))
-        (cdr cached)
+      (cdr cached)
       (let ((source (when (and (file-readable-p file)
                                (not (file-directory-p file)))
                       (with-temp-buffer
@@ -789,7 +774,7 @@
         source))))
 
 (defvar-local veritas--buffer-source-cache nil
-  "Cons of (MODIFICATION TICK . `veritas-source') for this buffer.")
+              "Cons of (MODIFICATION TICK . `veritas-source') for this buffer.")
 
 (defun veritas--buffer-source ()
   "Return the `veritas-source' of the current buffer, rescanning when it changed."
@@ -798,16 +783,16 @@
                  (eq (car veritas--buffer-source-cache) tick))
       (let ((file (and buffer-file-name (expand-file-name buffer-file-name))))
         (setq veritas--buffer-source-cache
-              (cons tick (veritas--scan-buffer file)))))
+          (cons tick (veritas--scan-buffer file)))))
     (cdr veritas--buffer-source-cache)))
 
 (defun veritas--all-nodes (source)
   "Return every definition of SOURCE, outermost first."
   (let ((acc '()))
     (cl-labels ((walk (node)
-                  (push node acc)
-                  (dolist (child (veritas-node-children node)) (walk child))))
-               (dolist (node (veritas-source-nodes source)) (walk node)))
+                      (push node acc)
+                      (dolist (child (veritas-node-children node)) (walk child))))
+      (dolist (node (veritas-source-nodes source)) (walk node)))
     (nreverse acc)))
 
 (defun veritas--test-node-p (node)
@@ -823,14 +808,14 @@
   "Return the names the runner may report NODE under.\n\nA BDD step is a test named after its keyword, and the runner prefixes that\nkeyword when reporting the step, so both the plain name and the prefixed one\nare accepted.  A scenario is reported under a Scenario: prefix in the same\nway."
   (let ((name (veritas-node-name node)))
     (pcase (veritas-node-type node)
-      ((or 'scenario 'feature 'story 'fabula 'scaena)
-       (list (concat "Scenario: " name) name))
-      ((or 'given 'dato) (list (concat "Given " name) name))
-      ((or 'when-step 'quando) (list (concat "When " name) name))
-      ((or 'then 'tunc) (list (concat "Then " name) name))
-      ((or 'and-step 'etiam) (list (concat "And " name) name))
-      ((or 'but-step 'sed) (list (concat "But " name) name))
-      (_ (list name)))))
+           ((or 'scenario 'feature 'story 'fabula 'scaena)
+            (list (concat "Scenario: " name) name))
+           ((or 'given 'dato) (list (concat "Given " name) name))
+           ((or 'when-step 'quando) (list (concat "When " name) name))
+           ((or 'then 'tunc) (list (concat "Then " name) name))
+           ((or 'and-step 'etiam) (list (concat "And " name) name))
+           ((or 'but-step 'sed) (list (concat "But " name) name))
+           (_ (list name)))))
 
 (defun veritas--group-node-p (node)
   "Return non-nil when NODE groups other definitions."
@@ -839,8 +824,8 @@
 
 (defun veritas--node-at-point (&optional point)
   "Return the innermost definition containing POINT in the current buffer."
-  (let ((point (or point (point)))
-        (innermost nil))
+  (let* ((point (or point (point)))
+         (innermost nil))
     (dolist (node (veritas--all-nodes (veritas--buffer-source)))
       (when (and (veritas-node-start node)
                  (<= (veritas-node-start node) point)
@@ -872,10 +857,10 @@
     path))
 
 ;;; Querying the definitions
-;;
-;; These are the names to build on: a key binding, a completion table or a
-;; project command of your own can ask what a buffer declares without knowing
-;; how the scan works.
+;;;
+;;; These are the names to build on: a key binding, a completion table or a
+;;; project command of your own can ask what a buffer declares without knowing
+;;; how the scan works.
 
 (defun veritas-nodes (&optional source)
   "Return every definition of SOURCE, outermost first.\n\nSOURCE defaults to what this buffer declares, rescanned when it changed."
@@ -909,45 +894,45 @@
 
 (defun veritas-nodes-in-line (&optional line source)
   "Return the definitions that begin on LINE, by default the current line."
-  (let ((line (or line (line-number-at-pos))))
+  (let* ((line (or line (line-number-at-pos))))
     (seq-filter (lambda (node) (eql line (veritas-node-line node)))
                 (veritas-nodes source))))
 
 ;;; The run
 
 (cl-defstruct (veritas--run (:constructor veritas--make-run) (:copier nil))
-              "One invocation of the Veritas CLI and everything it reported."
-              (id nil)
-              (root nil :documentation "Project root the runner was invoked in.")
-              (command nil :documentation "Full argv, as a list of strings.")
-              ;; Named `cli-flags' rather than `flags' because the accessor would
-              ;; otherwise collide with `veritas--run-flags', which builds them.
-              (cli-flags nil :documentation "Just the Veritas flags, for reruns.")
-              (layout nil :documentation "Test layout used to resolve the reported files.")
-              (buffer nil :documentation "The structured report buffer.")
-              (log-buffer nil :documentation "The raw output buffer.")
-              (stderr-buffer nil :documentation "Where the runner's standard error goes.")
-              (process nil)
-              (partial "" :documentation "Bytes of the line being read, not yet terminated.")
-              (timer nil :documentation "Pending debounced render.")
-              (started nil :documentation "Time the run was started.")
-              (ended nil :documentation "Time the run finished.")
-              (exit nil :documentation "The process exit status, once there is one.")
-              (status 'running :documentation "One of running, passed, failed, aborted.")
-              (files nil :documentation "Per-file nodes, in the order the runner reached them.")
-              (current-file nil)
-              (current-suite nil)
-              (current-test nil)
-              (pending-assert nil :documentation "The assertion awaiting its pass or fail.")
-              (bench-state nil :documentation "Where inside a benchmark report the stream is.")
-              (pending-bench nil)
-              (last-bench nil)
-              (seed nil)
-              (fatal nil :documentation "Messages that describe a failure of the run itself.")
-              (discovered nil :documentation "Relative paths the runner said it found.")
-              (env nil :documentation "Extra environment variables used.")
-              (cleanup nil :documentation "Temporary directory to remove when done.")
-              (analysis nil :documentation "Cached walk of the result tree, for rendering."))
+  "One invocation of the Veritas CLI and everything it reported."
+  (id nil)
+  (root nil :documentation "Project root the runner was invoked in.")
+  (command nil :documentation "Full argv, as a list of strings.")
+  ;; Named `cli-flags' rather than `flags' because the accessor would
+  ;; otherwise collide with `veritas--run-flags', which builds them.
+  (cli-flags nil :documentation "Just the Veritas flags, for reruns.")
+  (layout nil :documentation "Test layout used to resolve the reported files.")
+  (buffer nil :documentation "The structured report buffer.")
+  (log-buffer nil :documentation "The raw output buffer.")
+  (stderr-buffer nil :documentation "Where the runner's standard error goes.")
+  (process nil)
+  (partial "" :documentation "Bytes of the line being read, not yet terminated.")
+  (timer nil :documentation "Pending debounced render.")
+  (started nil :documentation "Time the run was started.")
+  (ended nil :documentation "Time the run finished.")
+  (exit nil :documentation "The process exit status, once there is one.")
+  (status 'running :documentation "One of running, passed, failed, aborted.")
+  (files nil :documentation "Per-file nodes, in the order the runner reached them.")
+  (current-file nil)
+  (current-suite nil)
+  (current-test nil)
+  (pending-assert nil :documentation "The assertion awaiting its pass or fail.")
+  (bench-state nil :documentation "Where inside a benchmark report the stream is.")
+  (pending-bench nil)
+  (last-bench nil)
+  (seed nil)
+  (fatal nil :documentation "Messages that describe a failure of the run itself.")
+  (discovered nil :documentation "Relative paths the runner said it found.")
+  (env nil :documentation "Extra environment variables used.")
+  (cleanup nil :documentation "Temporary directory to remove when done.")
+  (analysis nil :documentation "Cached walk of the result tree, for rendering."))
 
 (defvar veritas--runs nil
   "The runs of this Emacs session, newest first.")
@@ -956,7 +941,7 @@
   "The most recent run, which the rerun commands and the report buffer use.")
 
 (defvar-local veritas--run nil
-  "The run whose report this buffer shows.")
+              "The run whose report this buffer shows.")
 
 (defvar veritas--process-runs (make-hash-table :test #'eq)
   "Map of a live runner process to the `veritas--run' it belongs to.")
@@ -966,7 +951,7 @@
 
 (defun veritas-running-p (&optional run)
   "Return non-nil when RUN, by default the most recent run, is still going."
-  (let ((run (or run veritas--last-run)))
+  (let* ((run (or run veritas--last-run)))
     (and run (eq 'running (veritas--run-status run)))))
 
 (defun veritas--kill (run)
@@ -997,9 +982,9 @@
 (defun veritas--get-buffer (name reuse)
   "Return the buffer called NAME, reusing it when REUSE is non-nil."
   (if (and reuse (get-buffer name))
-      (progn (with-current-buffer (get-buffer name)
-               (let ((inhibit-read-only t)) (erase-buffer)))
-             (get-buffer name))
+    (progn (with-current-buffer (get-buffer name)
+             (let ((inhibit-read-only t)) (erase-buffer)))
+      (get-buffer name))
     (generate-new-buffer name)))
 
 (defun veritas--log-text (run text)
@@ -1066,9 +1051,9 @@
     (with-current-buffer (veritas--run-buffer run)
       (veritas-results-mode)
       (setq veritas--run run
-            mode-line-process (list " [" (propertize "running"
-                                                     'face 'veritas-stat-face)
-                                    "]"))
+        mode-line-process (list " [" (propertize "running"
+                                                 'face 'veritas-stat-face)
+                                "]"))
       (let ((inhibit-read-only t))
         (erase-buffer)
         (veritas--insert-header run)))
@@ -1077,9 +1062,9 @@
     (let ((problems (and veritas-preflight
                          (veritas--preflight root command extra-env))))
       (if problems
-          ;; A checkout that cannot be imported is worth saying plainly, in the
-          ;; report, before a single test is read.
-          (veritas--refuse run problems)
+        ;; A checkout that cannot be imported is worth saying plainly, in the
+        ;; report, before a single test is read.
+        (veritas--refuse run problems)
         (let ((process-environment (veritas--process-environment root extra-env))
               (default-directory (file-name-as-directory root)))
           (setf (veritas--run-process run)
@@ -1141,11 +1126,11 @@
     (if start (float-time (time-subtract end start)) 0.0)))
 
 ;;; Reading the runner's output
-;;
-;; The runner is asked for its `json-reporter', so each event is one JSON
-;; object on one line.  The lines around the events still matter: the runner
-;; announces the file it is about to run in plain text, and that line is the
-;; only thing that ties a test name to a file.
+;;;
+;;; The runner is asked for its `json-reporter', so each event is one JSON
+;;; object on one line.  The lines around the events still matter: the runner
+;;; announces the file it is about to run in plain text, and that line is the
+;;; only thing that ties a test name to a file.
 
 (defconst veritas--file-marker-regexp
   "\\`running \\(.+?\\) tests from file: \\(.+?\\)\\(?:, entrypoint: \\(.+\\)\\)?\\'"
@@ -1178,8 +1163,8 @@
 
 (defun veritas--file-node (relative file)
   "Return a fresh file node for RELATIVE, whose source lives at FILE."
-  (let* ((node (veritas--make-node :type 'file :name relative :file file))
-         (source (and file (veritas--file-source file))))
+  (let ((node (veritas--make-node :type 'file :name relative :file file))
+        (source (and file (veritas--file-source file))))
     (when source
       (setf (veritas-node-children node)
             (mapcar (lambda (child) (veritas--copy-node child node))
@@ -1189,22 +1174,22 @@
 (defun veritas--node-kind-match-p (node kind)
   "Return non-nil when NODE may receive a result of KIND."
   (pcase kind
-    ('group (veritas--group-node-p node))
-    ('test (veritas--test-node-p node))
-    ('benchmark (eq (veritas-node-type node) 'benchmark))
-    (_ t)))
+         ('group (veritas--group-node-p node))
+         ('test (veritas--test-node-p node))
+         ('benchmark (eq (veritas-node-type node) 'benchmark))
+         (_ t)))
 
 (defun veritas--take-node (container kind name)
   "Return the first unmatched node of KIND named NAME under CONTAINER.\n\nThe node is marked as matched, so a name that occurs twice feeds two results\nin the order they are reported."
   (let (found)
     (cl-labels ((walk (node)
-                  (unless found
-                    (when (and (not (veritas-node-matched node))
-                               (member name (veritas--node-candidate-names node))
-                               (veritas--node-kind-match-p node kind))
-                      (setq found node))
-                    (dolist (child (veritas-node-children node)) (walk child)))))
-               (dolist (child (veritas-node-children container)) (walk child)))
+                      (unless found
+                        (when (and (not (veritas-node-matched node))
+                                   (member name (veritas--node-candidate-names node))
+                                   (veritas--node-kind-match-p node kind))
+                          (setq found node))
+                        (dolist (child (veritas-node-children node)) (walk child)))))
+      (dolist (child (veritas-node-children container)) (walk child)))
     (when found (setf (veritas-node-matched found) t))
     found))
 
@@ -1300,27 +1285,27 @@
 (defun veritas--on-benchmark (run value)
   "Handle one of the events a benchmark report is made of.\n\nA benchmark emits its name, then a run index and the profiler's own report for\nthat run, once per run, all under the same level.  The name is the only string\nthat does not follow an index."
   (if (numberp value)
-      (progn (setf (veritas--run-bench-state run) 'index)
-             (let ((node (veritas--run-pending-bench run)))
-               (when node
-                 (setf (veritas-node-duration node)
-                       (1+ (or (veritas-node-duration node) 0))))))
+    (progn (setf (veritas--run-bench-state run) 'index)
+      (let ((node (veritas--run-pending-bench run)))
+        (when node
+          (setf (veritas-node-duration node)
+                (1+ (or (veritas-node-duration node) 0))))))
     (let ((text (veritas--stringify value)))
       (cond
-       ((eq (veritas--run-bench-state run) 'index)
-        (setf (veritas--run-bench-state run) 'details)
-        (let ((node (veritas--run-pending-bench run)))
-          (when node
-            (setf (veritas-node-output node)
-                  (concat (veritas-node-output node) text "\n")))))
-       (t
-        (setf (veritas--run-bench-state run) 'name)
-        (let ((node (or (veritas--take-node (veritas--run-current-file run)
-                                            'benchmark text)
-                        (veritas--synthetic-node run 'benchmark text))))
-          (setf (veritas-node-status node) 'pass
-                (veritas-node-duration node) 0
-                (veritas--run-pending-bench run) node)))))))
+        ((eq (veritas--run-bench-state run) 'index)
+         (setf (veritas--run-bench-state run) 'details)
+         (let ((node (veritas--run-pending-bench run)))
+           (when node
+             (setf (veritas-node-output node)
+                   (concat (veritas-node-output node) text "\n")))))
+        (t
+          (setf (veritas--run-bench-state run) 'name)
+          (let ((node (or (veritas--take-node (veritas--run-current-file run)
+                                              'benchmark text)
+                          (veritas--synthetic-node run 'benchmark text))))
+            (setf (veritas-node-status node) 'pass
+                  (veritas-node-duration node) 0
+                  (veritas--run-pending-bench run) node)))))))
 
 (defun veritas--record-file-duration (run seconds microseconds)
   "Note that the file RUN is on took SECONDS and MICROSECONDS."
@@ -1337,12 +1322,12 @@
   "Read the seed and the timings out of an informational MESSAGE."
   (let ((text (veritas--stringify message)))
     (cond
-     ((string-match "shuffled with seed \\([0-9]+\\)" text)
-      (setf (veritas--run-seed run) (string-to-number (match-string 1 text))))
-     ((string-match veritas--timing-regexp text)
-      (veritas--record-file-duration run
-                                     (string-to-number (match-string 2 text))
-                                     (string-to-number (match-string 3 text)))))))
+      ((string-match "shuffled with seed \\([0-9]+\\)" text)
+       (setf (veritas--run-seed run) (string-to-number (match-string 1 text))))
+      ((string-match veritas--timing-regexp text)
+       (veritas--record-file-duration run
+                                      (string-to-number (match-string 2 text))
+                                      (string-to-number (match-string 3 text)))))))
 
 (defun veritas--handle-event (run line)
   "Handle one JSON event LINE of RUN."
@@ -1350,44 +1335,44 @@
          (level (and object (veritas--stringify (alist-get 'level object))))
          (message (and object (alist-get 'message object))))
     (pcase level
-      ("suite" (veritas--on-suite run (veritas--stringify message)))
-      ("test" (veritas--on-test run (veritas--stringify message)))
-      ("assert" (veritas--on-assert run (veritas--stringify message)))
-      ("pass" (veritas--on-result run 'pass (veritas--stringify message)))
-      ("fail" (veritas--on-result run 'fail (veritas--stringify message)))
-      ("skip" (veritas--on-result run 'skip (veritas--stringify message)))
-      ("benchmark" (veritas--on-benchmark run message))
-      ("info" (veritas--on-info run message))
-      ("error" (push (string-trim (veritas--stringify message))
-                     (veritas--run-fatal run)))
-      ("debug" nil)
-      ("warn" (push (veritas--stringify message) (veritas--run-fatal run)))
-      (_ (veritas--log-text run (concat line "\n"))))
+           ("suite" (veritas--on-suite run (veritas--stringify message)))
+           ("test" (veritas--on-test run (veritas--stringify message)))
+           ("assert" (veritas--on-assert run (veritas--stringify message)))
+           ("pass" (veritas--on-result run 'pass (veritas--stringify message)))
+           ("fail" (veritas--on-result run 'fail (veritas--stringify message)))
+           ("skip" (veritas--on-result run 'skip (veritas--stringify message)))
+           ("benchmark" (veritas--on-benchmark run message))
+           ("info" (veritas--on-info run message))
+           ("error" (push (string-trim (veritas--stringify message))
+                          (veritas--run-fatal run)))
+           ("debug" nil)
+           ("warn" (push (veritas--stringify message) (veritas--run-fatal run)))
+           (_ (veritas--log-text run (concat line "\n"))))
     (veritas--schedule-render run)))
 
 (defun veritas--handle-line (run line)
   "Handle one line of RUN's standard output."
   (let ((text (string-trim-right line)))
     (cond
-     ((string-empty-p text) nil)
-     ((string-match veritas--file-marker-regexp text)
-      (veritas--begin-file run (match-string 2 text))
-      (veritas--schedule-render run))
-     ((string-match veritas--found-regexp text)
-      (setf (veritas--run-discovered run)
-            (split-string (match-string 2 text) "[ \t\n]+" t)))
-     ((string-prefix-p "{" text)
-      (veritas--handle-event run text))
-     ((string-match veritas--summary-regexp text) nil)
-     ((string-match "\\`finished running tests\\'" text) nil)
-     ((string-match "\\`scanning " text) nil)
-     (t
-      ;; Anything else is the test file's own output.  Keeping it lets the
-      ;; report show it on request without inventing a second log format.
-      (let ((file (veritas--run-current-file run)))
-        (when file
-          (setf (veritas-node-output file)
-                (concat (veritas-node-output file) text "\n"))))))))
+      ((string-empty-p text) nil)
+      ((string-match veritas--file-marker-regexp text)
+       (veritas--begin-file run (match-string 2 text))
+       (veritas--schedule-render run))
+      ((string-match veritas--found-regexp text)
+       (setf (veritas--run-discovered run)
+             (split-string (match-string 2 text) "[ \t\n]+" t)))
+      ((string-prefix-p "{" text)
+       (veritas--handle-event run text))
+      ((string-match veritas--summary-regexp text) nil)
+      ((string-match "\\`finished running tests\\'" text) nil)
+      ((string-match "\\`scanning " text) nil)
+      (t
+        ;; Anything else is the test file's own output.  Keeping it lets the
+        ;; report show it on request without inventing a second log format.
+        (let ((file (veritas--run-current-file run)))
+          (when file
+            (setf (veritas-node-output file)
+                  (concat (veritas-node-output file) text "\n"))))))))
 
 (defun veritas--stderr-text (run)
   "Return what RUN's standard error produced, as a string."
@@ -1466,10 +1451,10 @@
         (let ((inhibit-read-only t)) (veritas--insert-header run))))))
 
 ;;; Reading the result tree
-;;
-;; The statuses recorded while the stream was read already carry the outcome of
-;; every ancestor, so the report only has to walk the tree once to count things
-;; and to work out what a collapsed group should say.
+;;;
+;;; The statuses recorded while the stream was read already carry the outcome of
+;;; every ancestor, so the report only has to walk the tree once to count things
+;;; and to work out what a collapsed group should say.
 
 (defconst veritas--stat-tests 0)
 (defconst veritas--stat-passed 1)
@@ -1487,22 +1472,22 @@
   (or (gethash node table)
       (let ((stats (make-vector veritas--stat-width 0)))
         (cond
-         ((veritas--unit-node-p node)
-          ;; A benchmark is a unit of its own, not a test, so the two are
-          ;; counted apart and the report can say "4 tests, 1 benchmark".
-          (if (eq (veritas-node-type node) 'benchmark)
-              (aset stats veritas--stat-benchmarks 1)
-            (aset stats veritas--stat-tests 1))
-          (pcase (veritas-node-status node)
-            ('pass (aset stats veritas--stat-passed 1))
-            ('fail (aset stats veritas--stat-failed 1))
-            ('error (aset stats veritas--stat-errors 1))
-            ('skip (aset stats veritas--stat-skipped 1))
-            (_ (aset stats veritas--stat-not-run 1))))
-         ((eq (veritas-node-type node) 'assert)
-          (aset stats veritas--stat-assertions 1)
-          (when (memq (veritas-node-status node) '(fail error))
-            (aset stats veritas--stat-failed-assertions 1))))
+          ((veritas--unit-node-p node)
+           ;; A benchmark is a unit of its own, not a test, so the two are
+           ;; counted apart and the report can say "4 tests, 1 benchmark".
+           (if (eq (veritas-node-type node) 'benchmark)
+             (aset stats veritas--stat-benchmarks 1)
+             (aset stats veritas--stat-tests 1))
+           (pcase (veritas-node-status node)
+                  ('pass (aset stats veritas--stat-passed 1))
+                  ('fail (aset stats veritas--stat-failed 1))
+                  ('error (aset stats veritas--stat-errors 1))
+                  ('skip (aset stats veritas--stat-skipped 1))
+                  (_ (aset stats veritas--stat-not-run 1))))
+          ((eq (veritas-node-type node) 'assert)
+           (aset stats veritas--stat-assertions 1)
+           (when (memq (veritas-node-status node) '(fail error))
+             (aset stats veritas--stat-failed-assertions 1))))
         ;; The children are walked whatever NODE counted as, because the
         ;; assertions of a test belong to the totals of its file.
         (dolist (child (veritas-node-children node))
@@ -1527,55 +1512,55 @@
 (defun veritas--derived-status (node)
   "Return the status NODE should be shown with.\n\nA group says what its children say, in the order that matters: an error beats a\nfailure, a failure beats a pass, and a group nothing reported from is one that\ndid not run."
   (cond
-   ((or (veritas--unit-node-p node) (eq (veritas-node-type node) 'assert))
-    (veritas-node-status node))
-   ((eq (veritas-node-status node) 'running) 'running)
-   (t
-    (let ((statuses (mapcar #'veritas--derived-status
-                            (veritas-node-children node))))
-      (cond ((memq 'error statuses) 'error)
-            ((memq 'fail statuses) 'fail)
-            ((memq 'running statuses) 'running)
-            ((memq 'pass statuses) 'pass)
-            ((memq 'skip statuses) 'skip)
-            (t 'not-run))))))
+    ((or (veritas--unit-node-p node) (eq (veritas-node-type node) 'assert))
+     (veritas-node-status node))
+    ((eq (veritas-node-status node) 'running) 'running)
+    (t
+      (let ((statuses (mapcar #'veritas--derived-status
+                              (veritas-node-children node))))
+        (cond ((memq 'error statuses) 'error)
+              ((memq 'fail statuses) 'fail)
+              ((memq 'running statuses) 'running)
+              ((memq 'pass statuses) 'pass)
+              ((memq 'skip statuses) 'skip)
+              (t 'not-run))))))
 
 (defun veritas--status-glyph (status)
   "Return the glyph and face used for STATUS."
   (pcase status
-    ('pass (cons "\u2714" 'veritas-pass-face))
-    ('fail (cons "\u2718" 'veritas-fail-face))
-    ('error (cons "\u26a0" 'veritas-error-face))
-    ('skip (cons "\u2298" 'veritas-skip-face))
-    ('running (cons "\u2026" 'veritas-stat-face))
-    (_ (cons "\u00b7" 'veritas-not-run-face))))
+         ('pass (cons "\u2714" 'veritas-pass-face))
+         ('fail (cons "\u2718" 'veritas-fail-face))
+         ('error (cons "\u26a0" 'veritas-error-face))
+         ('skip (cons "\u2298" 'veritas-skip-face))
+         ('running (cons "\u2026" 'veritas-stat-face))
+         (_ (cons "\u00b7" 'veritas-not-run-face))))
 
 (defun veritas--unit-type-label (node)
   "Return what to call NODE in the report."
   (pcase (veritas-node-type node)
-    ('test "test")
-    ('benchmark "benchmark")
-    ('assert "assertion")
-    ('file "file")
-    ('scenario "scenario")
-    ('suite "suite")
-    ((or 'given 'when-step 'then 'and-step 'but-step
-         'Given 'When 'Then 'dato 'quando 'tunc 'etiam 'sed)
-     "step")
-    (_ (symbol-name (veritas-node-type node)))))
+         ('test "test")
+         ('benchmark "benchmark")
+         ('assert "assertion")
+         ('file "file")
+         ('scenario "scenario")
+         ('suite "suite")
+         ((or 'given 'when-step 'then 'and-step 'but-step
+              'Given 'When 'Then 'dato 'quando 'tunc 'etiam 'sed)
+          "step")
+         (_ (symbol-name (veritas-node-type node)))))
 
 (defun veritas--node-face (node)
   "Return the face a node's name should be shown with."
   (pcase (veritas-node-type node)
-    ((or 'test 'assert) 'veritas-test-face)
-    ('benchmark 'veritas-benchmark-face)
-    ('file 'veritas-file-face)
-    ((or 'given 'when-step 'then 'and-step 'but-step
-         'Given 'When 'Then 'dato 'quando 'tunc 'etiam 'sed)
-     'veritas-step-face)
-    ((or 'suite 'scenario 'feature 'story 'fabula 'scaena 'test-each 'suite-each)
-     'veritas-suite-face)
-    (_ 'veritas-suite-face)))
+         ((or 'test 'assert) 'veritas-test-face)
+         ('benchmark 'veritas-benchmark-face)
+         ('file 'veritas-file-face)
+         ((or 'given 'when-step 'then 'and-step 'but-step
+              'Given 'When 'Then 'dato 'quando 'tunc 'etiam 'sed)
+          'veritas-step-face)
+         ((or 'suite 'scenario 'feature 'story 'fabula 'scaena 'test-each 'suite-each)
+          'veritas-suite-face)
+         (_ 'veritas-suite-face)))
 
 (defun veritas--node-position (node)
   "Return (FILE . LINE) for NODE, or nil.\n\nA node that a source definition did not produce - one a table generated at run\ntime, say - borrows the position of the nearest ancestor that has one."
@@ -1597,23 +1582,23 @@
   "Return every test and benchmark of RUN that failed, in report order."
   (let ((failures '()))
     (cl-labels ((walk (node)
-                  (when (memq (veritas--derived-status node) '(fail error))
-                    (when (veritas--unit-node-p node)
-                      (push node failures))
-                    (dolist (child (veritas-node-children node)) (walk child)))))
-               (dolist (file (veritas--run-files run)) (walk file)))
+                      (when (memq (veritas--derived-status node) '(fail error))
+                        (when (veritas--unit-node-p node)
+                          (push node failures))
+                        (dolist (child (veritas-node-children node)) (walk child)))))
+      (dolist (file (veritas--run-files run)) (walk file)))
     (nreverse failures)))
 
 (defun veritas--failure-message (node)
   "Return the first failure message reported under NODE, or nil."
   (cl-labels ((walk (node)
-                (cond
-                 ((and (eq (veritas-node-type node) 'assert)
-                       (memq (veritas-node-status node) '(fail error))
-                       (veritas-node-messages node))
-                  (car (veritas-node-messages node)))
-                 (t (seq-some #'walk (veritas-node-children node))))))
-             (walk node)))
+                    (cond
+                      ((and (eq (veritas-node-type node) 'assert)
+                            (memq (veritas-node-status node) '(fail error))
+                            (veritas-node-messages node))
+                       (car (veritas-node-messages node)))
+                      (t (seq-some #'walk (veritas-node-children node))))))
+    (walk node)))
 
 (defun veritas--group-summary (stats)
   "Return a one-line count of STATS, for a group or a file."
@@ -1708,32 +1693,32 @@
 (defun veritas--run-status-glyph (status)
   "Return the glyph and face used for a run in STATUS."
   (pcase status
-    ('passed (cons "\u2714" 'veritas-pass-face))
-    ('failed (cons "\u2718" 'veritas-fail-face))
-    ('aborted (cons "\u26a0" 'veritas-error-face))
-    ('running (cons "\u2026" 'veritas-stat-face))
-    (_ (cons "\u00b7" 'veritas-stat-face))))
+         ('passed (cons "\u2714" 'veritas-pass-face))
+         ('failed (cons "\u2718" 'veritas-fail-face))
+         ('aborted (cons "\u26a0" 'veritas-error-face))
+         ('running (cons "\u2026" 'veritas-stat-face))
+         (_ (cons "\u00b7" 'veritas-stat-face))))
 
 (defun veritas--status-label (status)
   "Return the word used for a run in STATUS."
   (pcase status
-    ('running "running")
-    ('passed "passed")
-    ('failed "failed")
-    ('aborted "aborted")
-    (_ (symbol-name status))))
+         ('running "running")
+         ('passed "passed")
+         ('failed "failed")
+         ('aborted "aborted")
+         (_ (symbol-name status))))
 
 (defun veritas--stats-line (run totals)
   "Return the counts line of RUN's report, from its TOTALS."
-  (let* ((files (length (veritas--run-files run)))
-         (tests (aref totals veritas--stat-tests))
-         (benchmarks (aref totals veritas--stat-benchmarks))
-         (assertions (aref totals veritas--stat-assertions))
-         (passed (aref totals veritas--stat-passed))
-         (failed (aref totals veritas--stat-failed))
-         (errors (aref totals veritas--stat-errors))
-         (skipped (aref totals veritas--stat-skipped))
-         (not-run (aref totals veritas--stat-not-run)))
+  (let ((files (length (veritas--run-files run)))
+        (tests (aref totals veritas--stat-tests))
+        (benchmarks (aref totals veritas--stat-benchmarks))
+        (assertions (aref totals veritas--stat-assertions))
+        (passed (aref totals veritas--stat-passed))
+        (failed (aref totals veritas--stat-failed))
+        (errors (aref totals veritas--stat-errors))
+        (skipped (aref totals veritas--stat-skipped))
+        (not-run (aref totals veritas--stat-not-run)))
     (string-join
      (delq nil
            (list (format "%d file%s" files (if (= files 1) "" "s"))
@@ -1817,8 +1802,8 @@
                      (if message message "")
                      (if (and message location) "  " "")
                      (if location
-                         (format "%s:%s" (abbreviate-file-name (car location))
-                                 (cdr location))
+                       (format "%s:%s" (abbreviate-file-name (car location))
+                               (cdr location))
                        "")
                      "\n")
              'face 'veritas-detail-face)))))))
@@ -1826,10 +1811,10 @@
 (defun veritas--visible-children (node)
   "Return the children of NODE the report should show.\n\nA test's assertions are only worth a line when they failed, unless the user\nasked to see the passing ones as well."
   (if (veritas--unit-node-p node)
-      (seq-filter (lambda (child)
-                    (or veritas-report-show-passed
-                        (memq (veritas-node-status child) '(fail error))))
-                  (veritas-node-children node))
+    (seq-filter (lambda (child)
+                  (or veritas-report-show-passed
+                      (memq (veritas-node-status child) '(fail error))))
+                (veritas-node-children node))
     (veritas-node-children node)))
 
 (defun veritas--insert-node (run node depth)
@@ -1843,39 +1828,37 @@
          (children (veritas--visible-children node)))
     (insert (make-string (* 2 depth) ?\s))
     (if (and children (not (eq status 'not-run)))
-        (veritas--insert-fold node)
+      (veritas--insert-fold node)
       ;; Keep the columns lined up where there is nothing to fold.
       (insert "   "))
     (veritas--insert (car glyph) 'face (cdr glyph))
     (insert " ")
     (veritas--insert-node-name node)
     (cond
-     ((eq type 'file)
-      (let ((summary (veritas--group-summary stats)))
-        (when summary
-          (insert "   ")
-          (veritas--insert summary 'face 'veritas-stat-face))))
-     ((eq type 'assert)
-      (let ((message (string-join (veritas-node-messages node) "; ")))
-        (when (not (string-empty-p message))
-          (insert "  ")
-          (veritas--insert message 'face 'veritas-detail-face))))
-     ((and (veritas--unit-node-p node) (memq status '(fail error)))
-      (let ((message (veritas--failure-message node)))
-        (when message
-          (insert "  ")
-          (veritas--insert message 'face 'veritas-detail-face))))
-     ((eq type 'benchmark)
-      (insert "  ")
-      (veritas--insert (format "%s run%s" (or (veritas-node-duration node) 0)
-                               (if (eql 1 (veritas-node-duration node)) "" "s"))
-                       'face 'veritas-detail-face))
-     ((veritas--unit-node-p node) nil)
-     (t
-      (let ((summary (veritas--group-summary stats)))
-        (when summary
-          (insert "   ")
-          (veritas--insert summary 'face 'veritas-stat-face)))))
+      ((eq type 'file)
+       (let ((summary (veritas--group-summary stats)))
+         (when summary
+           (insert "   ")
+           (veritas--insert summary 'face 'veritas-stat-face))))
+      ((eq type 'assert)
+       (let ((message (string-join (veritas-node-messages node) "; ")))
+         (unless (string-empty-p message) (insert "  ") (veritas--insert message 'face 'veritas-detail-face))))
+      ((and (veritas--unit-node-p node) (memq status '(fail error)))
+       (let ((message (veritas--failure-message node)))
+         (when message
+           (insert "  ")
+           (veritas--insert message 'face 'veritas-detail-face))))
+      ((eq type 'benchmark)
+       (insert "  ")
+       (veritas--insert (format "%s run%s" (or (veritas-node-duration node) 0)
+                                (if (eql 1 (veritas-node-duration node)) "" "s"))
+                        'face 'veritas-detail-face))
+      ((veritas--unit-node-p node) nil)
+      (t
+        (let ((summary (veritas--group-summary stats)))
+          (when summary
+            (insert "   ")
+            (veritas--insert summary 'face 'veritas-stat-face)))))
     (insert "\n")
     (add-text-properties line-start (point) (list 'veritas-node node))
     (when (and veritas-report-show-output
@@ -1903,9 +1886,9 @@
 
 (defun veritas--node-at-position (position)
   "Return the report node at POSITION, or nil."
-  (let ((position (if (or (eobp) (= position (point-max)))
-                      (max (point-min) (1- position))
-                    position)))
+  (let* ((position (if (or (eobp) (= position (point-max)))
+                     (max (point-min) (1- position))
+                     position)))
     (get-text-property position 'veritas-node)))
 
 (defun veritas--goto-node (node)
@@ -1914,7 +1897,7 @@
   (let ((found nil))
     (while (and (not found) (not (eobp)))
       (if (eq (veritas--node-at-position (point)) node)
-          (setq found (point))
+        (setq found (point))
         (forward-line 1)))
     (when found (goto-char found))))
 
@@ -1925,7 +1908,7 @@
       (let (point-node point-line)
         (with-current-buffer buffer
           (setq point-node (veritas--node-at-position (point))
-                point-line (line-number-at-pos)))
+            point-line (line-number-at-pos)))
         (with-current-buffer buffer
           ;; The buffer knows which run it is showing, so a link inside it can
           ;; render again without the caller telling it which run that is.
@@ -1935,22 +1918,22 @@
             (save-excursion
               (erase-buffer)
               (condition-case error
-                  (progn
-                    (veritas--insert-header run)
-                    (veritas--insert-failures run)
-                    (veritas--insert-tree run)
-                    (veritas--insert-footer run))
+                (progn
+                  (veritas--insert-header run)
+                  (veritas--insert-failures run)
+                  (veritas--insert-tree run)
+                  (veritas--insert-footer run))
                 (error
-                 ;; A half-read stream must not take the buffer down with it.
-                 (insert (format "\nveritas: could not draw the report: %s\n"
-                                 (error-message-string error)))))))
+                  ;; A half-read stream must not take the buffer down with it.
+                  (insert (format "\nveritas: could not draw the report: %s\n"
+                                  (error-message-string error)))))))
           (setq mode-line-process
-                (list " [" (propertize (veritas--status-label
-                                        (veritas--run-status run))
-                                       'face 'veritas-stat-face)
-                      "]"))
+            (list " [" (propertize (veritas--status-label
+                                    (veritas--run-status run))
+                                   'face 'veritas-stat-face)
+                  "]"))
           (if (and point-node (veritas--goto-node point-node))
-              nil
+            nil
             (goto-char (point-min))
             (forward-line (1- (min point-line (line-number-at-pos (point-max))))))
           (set-buffer-modified-p nil))))))
@@ -1977,18 +1960,18 @@
     (while rest
       (let ((flag (car rest)))
         (cond
-         ((not (member flag veritas--selecting-flags))
-          (push flag result)
-          (setq rest (cdr rest)))
-         ((member flag '("--only-failed" "--no-only-failed"))
-          (setq rest (cdr rest)))
-         (t (setq rest (cddr rest))))))
+          ((not (member flag veritas--selecting-flags))
+           (push flag result)
+           (setq rest (cdr rest)))
+          ((member flag '("--only-failed" "--no-only-failed"))
+           (setq rest (cdr rest)))
+          (t (setq rest (cddr rest))))))
     (nreverse result)))
 
 (defun veritas--rerun (run &optional extra-flags)
   "Run what RUN ran again, with EXTRA-FLAGS replacing its selection."
   (let ((base (if extra-flags
-                  (veritas--strip-selecting-flags (veritas--run-cli-flags run))
+                (veritas--strip-selecting-flags (veritas--run-cli-flags run))
                 (veritas--run-cli-flags run))))
     (veritas--start (veritas--run-root run) (append base extra-flags))))
 
@@ -1998,13 +1981,13 @@
         (file (veritas-node-file node))
         (root (veritas--run-root run)))
     (pcase (veritas-node-type node)
-      ('test (veritas--rerun run (list "--only-test" name)))
-      ((or 'benchmark 'file)
-       (let ((overrides (and file (veritas--file-run-overrides file root))))
-         (if overrides
-             (veritas--start root (veritas--run-cli-flags run) overrides)
-           (veritas--rerun run nil))))
-      (_ (veritas--rerun run (list "--only-suite" name))))))
+           ('test (veritas--rerun run (list "--only-test" name)))
+           ((or 'benchmark 'file)
+            (let ((overrides (and file (veritas--file-run-overrides file root))))
+              (if overrides
+                (veritas--start root (veritas--run-cli-flags run) overrides)
+                (veritas--rerun run nil))))
+           (_ (veritas--rerun run (list "--only-suite" name))))))
 
 (defun veritas--show-log (run)
   "Show the raw output RUN produced."
@@ -2030,18 +2013,18 @@
   "Visit the source definition NODE stands for."
   (let ((location (veritas--node-position node)))
     (cond
-     ((null location)
-      (message "veritas: no source definition is known for \"%s\""
-               (veritas-node-name node)))
-     ((not (file-readable-p (car location)))
-      (user-error "veritas: cannot read %s" (abbreviate-file-name (car location))))
-     (t
-      (pop-to-buffer (find-file-noselect (car location)))
-      (goto-char (point-min))
-      (forward-line (1- (max 1 (or (cdr location) 1))))
-      (back-to-indentation)
-      (veritas--seek-assertion node)
-      (recenter)))))
+      ((null location)
+       (message "veritas: no source definition is known for \"%s\""
+                (veritas-node-name node)))
+      ((not (file-readable-p (car location)))
+       (user-error "veritas: cannot read %s" (abbreviate-file-name (car location))))
+      (t
+        (pop-to-buffer (find-file-noselect (car location)))
+        (goto-char (point-min))
+        (forward-line (1- (max 1 (or (cdr location) 1))))
+        (back-to-indentation)
+        (veritas--seek-assertion node)
+        (recenter)))))
 
 (defun veritas--toggle-node (node)
   "Fold or unfold NODE in the report."
@@ -2072,7 +2055,7 @@
   (let* ((positions (veritas--failing-positions))
          (here (point))
          (target (if (> direction 0)
-                     (seq-find (lambda (position) (> position here)) positions)
+                   (seq-find (lambda (position) (> position here)) positions)
                    (car (last (seq-filter (lambda (position) (< position here))
                                           positions))))))
     (when target (goto-char target))))
@@ -2094,7 +2077,7 @@
       (goto-char position)
       (let ((action (get-text-property position 'veritas-action)))
         (if (functionp action)
-            (funcall action)
+          (funcall action)
           (veritas-results-activate-at-point))))))
 
 (defun veritas-results-mouse-goto (event)
@@ -2122,7 +2105,7 @@
   (interactive)
   (let ((action (get-text-property (point) 'veritas-action)))
     (if (functionp action)
-        (funcall action)
+      (funcall action)
       (veritas-results-goto-definition))))
 
 (defun veritas-results-goto-definition ()
@@ -2130,7 +2113,7 @@
   (interactive)
   (let ((node (veritas--node-at-position (point))))
     (if node
-        (veritas--visit-node node)
+      (veritas--visit-node node)
       (user-error "veritas: there is no result on this line"))))
 
 (defun veritas-results-run-node ()
@@ -2138,7 +2121,7 @@
   (interactive)
   (let ((node (veritas--node-at-position (point))))
     (if (null node)
-        (user-error "veritas: there is no result on this line")
+      (user-error "veritas: there is no result on this line")
       (veritas--run-node (veritas--report-run) node))))
 
 (defun veritas-results-rerun (&optional extra-flags)
@@ -2227,10 +2210,10 @@
   (interactive)
   (let ((run (veritas--report-run)))
     (if (veritas-running-p run)
-        (progn (veritas--kill run)
-               (setf (veritas--run-status run) 'aborted)
-               (veritas--render run)
-               (message "veritas: stopped the run"))
+      (progn (veritas--kill run)
+        (setf (veritas--run-status run) 'aborted)
+        (veritas--render run)
+        (message "veritas: stopped the run"))
       (message "veritas: the run has finished"))))
 
 (defvar veritas-results-mode-map
@@ -2301,13 +2284,13 @@
 (defun veritas-run-file (&optional prefix)
   "Run the test file this buffer is visiting.\n\nVeritas cannot select a single file on its command line, so a throwaway scan\nroot of symbolic links is built for it; see `veritas-file-run-restricted'.\nWith a prefix argument the benchmarks are skipped."
   (interactive "P")
-  (let* ((root (veritas--root-or-error))
-         (file (cond ((and buffer-file-name
-                           (string-suffix-p ".scm" buffer-file-name))
-                      (expand-file-name buffer-file-name))
-                     ((derived-mode-p 'veritas-results-mode)
-                      (let ((node (veritas--node-at-position (point))))
-                        (and node (veritas-node-file node)))))))
+  (let ((root (veritas--root-or-error))
+        (file (cond ((and buffer-file-name
+                          (string-suffix-p ".scm" buffer-file-name))
+                     (expand-file-name buffer-file-name))
+                    ((derived-mode-p 'veritas-results-mode)
+                     (let ((node (veritas--node-at-position (point))))
+                       (and node (veritas-node-file node)))))))
     (unless file
       (user-error "veritas: there is no test file to run here"))
     (veritas--run-file file root prefix)))
@@ -2315,18 +2298,18 @@
 (defun veritas-run-here (&optional prefix)
   "Run the test, suite or benchmark at point.\n\nOutside a definition the file is run instead.  With a prefix argument the\nbenchmarks are skipped."
   (interactive "P")
-  (let* ((root (veritas--root-or-error))
-         (node (and (derived-mode-p 'scheme-mode) (veritas--node-at-point)))
-         (skip (veritas--prefix-means-no-benchmarks prefix)))
+  (let ((root (veritas--root-or-error))
+        (node (and (derived-mode-p 'scheme-mode) (veritas--node-at-point)))
+        (skip (veritas--prefix-means-no-benchmarks prefix)))
     (pcase (and node (veritas-node-type node))
-      ('test (veritas--start root (veritas--run-flags
-                                   root (list "--only-test" (veritas-node-name node))
-                                   skip)))
-      ((or 'suite 'scenario 'feature 'story 'fabula 'scaena 'test-each 'suite-each)
-       (veritas--start root (veritas--run-flags
-                             root (list "--only-suite" (veritas-node-name node))
-                             skip)))
-      (_ (veritas-run-file prefix)))))
+           ('test (veritas--start root (veritas--run-flags
+                                        root (list "--only-test" (veritas-node-name node))
+                                        skip)))
+           ((or 'suite 'scenario 'feature 'story 'fabula 'scaena 'test-each 'suite-each)
+            (veritas--start root (veritas--run-flags
+                                  root (list "--only-suite" (veritas-node-name node))
+                                  skip)))
+           (_ (veritas-run-file prefix)))))
 
 (defun veritas--project-candidates (types)
   "Return every project definition of TYPES, as a list of plists.\n\nEach element holds the name to select it by, a label that shows where it is,\nand the file and line it was found at."
@@ -2363,17 +2346,17 @@
 (defun veritas-run-test ()
   "Run one test of the project, chosen by name."
   (interactive)
-  (let* ((root (veritas--root-or-error))
-         (choice (veritas--prompt-for-definition "Test: " veritas--test-types)))
+  (let ((root (veritas--root-or-error))
+        (choice (veritas--prompt-for-definition "Test: " veritas--test-types)))
     (veritas--start root (veritas--run-flags root (list "--only-test"
                                                         (plist-get choice :name))))))
 
 (defun veritas-run-suite ()
   "Run one suite, scenario or table of the project, chosen by name."
   (interactive)
-  (let* ((root (veritas--root-or-error))
-         (choice (veritas--prompt-for-definition
-                  "Suite: " (mapcar #'intern veritas--group-keywords))))
+  (let ((root (veritas--root-or-error))
+        (choice (veritas--prompt-for-definition
+                 "Suite: " (mapcar #'intern veritas--group-keywords))))
     (veritas--start root (veritas--run-flags root (list "--only-suite"
                                                         (plist-get choice :name))))))
 
@@ -2394,25 +2377,25 @@
   (interactive "P")
   (let ((skip (veritas--prefix-means-no-benchmarks prefix)))
     (cond
-     ((null veritas--last-run) (veritas-run-all prefix))
-     (skip (veritas--start (veritas--run-root veritas--last-run)
-                           (veritas--run-flags (veritas--run-root veritas--last-run)
-                                               nil t)))
-     (t (veritas--rerun veritas--last-run nil)))))
+      ((null veritas--last-run) (veritas-run-all prefix))
+      (skip (veritas--start (veritas--run-root veritas--last-run)
+                            (veritas--run-flags (veritas--run-root veritas--last-run)
+                                                nil t)))
+      (t (veritas--rerun veritas--last-run nil)))))
 
 (defun veritas-show-report ()
   "Show the report of the most recent run."
   (interactive)
   (if (and veritas--last-run
            (buffer-live-p (veritas--run-buffer veritas--last-run)))
-      (veritas--display-report veritas--last-run)
+    (veritas--display-report veritas--last-run)
     (user-error "veritas: no run has been made yet")))
 
 (defun veritas-show-log ()
   "Show the raw output of the most recent run."
   (interactive)
   (if veritas--last-run
-      (veritas--show-log veritas--last-run)
+    (veritas--show-log veritas--last-run)
     (user-error "veritas: no run has been made yet")))
 
 ;;; Running with the project's own reporter
@@ -2438,9 +2421,9 @@
         (rest flags))
     (while rest
       (if (equal (car rest) "--reporter")
-          (progn (push "--reporter" result)
-                 (push reporter result)
-                 (setq rest (cddr rest)))
+        (progn (push "--reporter" result)
+          (push reporter result)
+          (setq rest (cddr rest)))
         (push (car rest) result)
         (setq rest (cdr rest))))
     (nreverse result)))
@@ -2482,26 +2465,26 @@
                          (veritas--preflight root command nil))))
       (pop-to-buffer buffer)
       (if problems
-          ;; A terminal-style log is no place to dig a backtrace out of: the
-          ;; reason goes at the top, where the command is.
-          (progn
-            (with-current-buffer buffer
-              (let ((inhibit-read-only t))
-                (dolist (problem problems)
-                  (insert (propertize (concat "veritas: " problem "\n")
-                                      'face 'veritas-error-face)))))
-            (message "veritas: %s" (car problems))
-            (setq veritas--raw-process nil))
+        ;; A terminal-style log is no place to dig a backtrace out of: the
+        ;; reason goes at the top, where the command is.
+        (progn
+          (with-current-buffer buffer
+            (let ((inhibit-read-only t))
+              (dolist (problem problems)
+                (insert (propertize (concat "veritas: " problem "\n")
+                                    'face 'veritas-error-face)))))
+          (message "veritas: %s" (car problems))
+          (setq veritas--raw-process nil))
         (setq veritas--raw-process
-              (make-process :name "veritas-raw"
-                            :command command
-                            :buffer nil
-                            :filter (lambda (_process text)
-                                      (veritas--raw-filter buffer text))
-                            :stderr buffer
-                            :connection-type 'pipe
-                            :coding 'utf-8
-                            :noquery t))
+          (make-process :name "veritas-raw"
+                        :command command
+                        :buffer nil
+                        :filter (lambda (_process text)
+                                  (veritas--raw-filter buffer text))
+                        :stderr buffer
+                        :connection-type 'pipe
+                        :coding 'utf-8
+                        :noquery t))
         (cl-pushnew (veritas--make-run :id 0 :root root :command command
                                        :status 'passed)
                     veritas--runs))
@@ -2572,7 +2555,7 @@ definition while the buffer is edited."
             (let ((position (copy-marker (veritas-node-start node)))
                   (children (veritas--imenu-entries (veritas-node-children node))))
               (if children
-                  (cons (veritas-node-name node) (cons position children))
+                (cons (veritas-node-name node) (cons position children))
                 (cons (veritas-node-name node) position))))
           nodes))
 
@@ -2598,18 +2581,18 @@ definition while the buffer is edited."
     map)
   "Keymap of `veritas-mode'.")
 
-;;;###autoload
+;;; ###autoload
 (define-minor-mode veritas-mode
   "Teach this Scheme buffer about Veritas.\n\nTurning it on fontifies the Veritas vocabulary, adds the definitions to Imenu\nand to `which-function-mode', and binds a command map under \\`C-c v'."
   :lighter (:eval (veritas--lighter))
   :keymap veritas-mode-map
   :group 'veritas
   (if veritas-mode
-      (progn
-        (font-lock-add-keywords nil veritas-font-lock-keywords 'append)
-        (setq-local imenu-create-index-function #'veritas-imenu-create-index)
-        (add-hook 'which-func-functions #'veritas-which-function nil t)
-        (setq-local add-log-current-defun-function #'veritas-which-function))
+    (progn
+      (font-lock-add-keywords nil veritas-font-lock-keywords 'append)
+      (setq-local imenu-create-index-function #'veritas-imenu-create-index)
+      (add-hook 'which-func-functions #'veritas-which-function nil t)
+      (setq-local add-log-current-defun-function #'veritas-which-function))
     (font-lock-remove-keywords nil veritas-font-lock-keywords)
     (kill-local-variable 'imenu-create-index-function)
     (remove-hook 'which-func-functions #'veritas-which-function t)
@@ -2617,7 +2600,7 @@ definition while the buffer is edited."
   (when (fboundp 'font-lock-flush)
     (font-lock-flush)))
 
-;;;###autoload
+;;; ###autoload
 (defun veritas-mode-maybe ()
   "Enable `veritas-mode' when this buffer belongs to a Veritas project."
   (when (and veritas-auto-enable
@@ -2645,54 +2628,54 @@ definition while the buffer is edited."
   "Keymap of the Veritas command menu.")
 
 (easy-menu-define veritas-menu veritas-mode-map "Veritas"
-  '("Veritas"
-    ["Run project" veritas-run-all t]
-    ["Run this file" veritas-run-file t]
-    ["Run what is at point" veritas-run-here t]
-    "--"
-    ["Run a test by name" veritas-run-test t]
-    ["Run a suite by name" veritas-run-suite t]
-    ["Run a tag" veritas-run-tag t]
-    ["Run what failed" veritas-run-failed t]
-    ["Run the last command again" veritas-run-last t]
-    "--"
-    ["Show the report" veritas-show-report t]
-    ["Show the raw output" veritas-show-log t]
-    ["Run with the project reporter" veritas-run-raw t]
-    "--"
-    ["Stop the run" veritas-kill t]))
+                  '("Veritas"
+                    ["Run project" veritas-run-all t]
+                    ["Run this file" veritas-run-file t]
+                    ["Run what is at point" veritas-run-here t]
+                    "--"
+                    ["Run a test by name" veritas-run-test t]
+                    ["Run a suite by name" veritas-run-suite t]
+                    ["Run a tag" veritas-run-tag t]
+                    ["Run what failed" veritas-run-failed t]
+                    ["Run the last command again" veritas-run-last t]
+                    "--"
+                    ["Show the report" veritas-show-report t]
+                    ["Show the raw output" veritas-show-log t]
+                    ["Run with the project reporter" veritas-run-raw t]
+                    "--"
+                    ["Stop the run" veritas-kill t]))
 
 (eval-when-compile (require 'transient nil t))
 
-;; The macro expands into calls to transient's own internals, which the compiler
-;; cannot see as defined even though the `when' below guarantees they are there
-;; whenever the prefix itself is.
+;;; The macro expands into calls to transient's own internals, which the compiler
+;;; cannot see as defined even though the `when' below guarantees they are there
+;;; whenever the prefix itself is.
 (with-no-warnings
-  (when (require 'transient nil t)
-    (transient-define-prefix veritas-transient ()
-                             "Run and report Veritas tests."
-                             ["Run"
-                              ("a" "project" veritas-run-all)
-                              ("f" "this file" veritas-run-file)
-                              ("t" "test, suite or benchmark at point" veritas-run-here)]
-                             ["Select"
-                              ("T" "a test, by name" veritas-run-test)
-                              ("s" "a suite, by name" veritas-run-suite)
-                              ("g" "a tag" veritas-run-tag)
-                              ("F" "what failed last time" veritas-run-failed)
-                              ("l" "the last command again" veritas-run-last)]
-                             ["Report"
-                              ("R" "show the report" veritas-show-report)
-                              ("L" "show the raw output" veritas-show-log)]
-                             ["Other"
-                              ("r" "run with the project reporter" veritas-run-raw)
-                              ("k" "stop the run" veritas-kill)])))
+ (when (require 'transient nil t)
+   (transient-define-prefix veritas-transient ()
+                            "Run and report Veritas tests."
+                            ["Run"
+                             ("a" "project" veritas-run-all)
+                             ("f" "this file" veritas-run-file)
+                             ("t" "test, suite or benchmark at point" veritas-run-here)]
+                            ["Select"
+                             ("T" "a test, by name" veritas-run-test)
+                             ("s" "a suite, by name" veritas-run-suite)
+                             ("g" "a tag" veritas-run-tag)
+                             ("F" "what failed last time" veritas-run-failed)
+                             ("l" "the last command again" veritas-run-last)]
+                            ["Report"
+                             ("R" "show the report" veritas-show-report)
+                             ("L" "show the raw output" veritas-show-log)]
+                            ["Other"
+                             ("r" "run with the project reporter" veritas-run-raw)
+                             ("k" "stop the run" veritas-kill)])))
 
 (defun veritas-dispatch ()
   "Run a Veritas command, choosing from a menu."
   (interactive)
   (if (fboundp 'veritas-transient)
-      (call-interactively #'veritas-transient)
+    (call-interactively #'veritas-transient)
     (message "veritas: a=project f=file t=here T=test s=suite g=tag F=failed l=last r=raw R=report L=log k=stop")
     (set-transient-map veritas-prefix-map t)))
 

@@ -401,10 +401,14 @@ checkout is not there.  The rest run against a recorded stream in =test/data/=
 and a source fixture in =test/veritas-test.el=, so they need neither Guile nor a
 network.
 
-* Licence
+* License
 :PROPERTIES:
-:CUSTOM_ID: licence
+:CUSTOM_ID: license
 :END:
 
-Like Veritas itself, =veritas.el= is free software under the GNU Lesser General
-Public License, version 3 or later.  See =COPYING=.
+veritas.el, its tests, its packaging and its documentation, including this
+document, are all free software under the MIT license: use it, change it and
+share it, keeping the copyright notice and the permission notice with every
+copy.
+
+https://github.com/jjba23/veritas.el/blob/trunk/LICENSE

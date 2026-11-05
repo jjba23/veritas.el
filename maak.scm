@@ -1,19 +1,8 @@
-;; veritas.el
+;;; veritas.el
 
-;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
+;;; Copyright © Josep Bigorra <jjbigorra@gmail.com>
 
-;; veritas.el is free software: you can redistribute it and/or modify
-;; it under the terms of the Lesser GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-
-;; veritas.el is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; Lesser GNU General Public License for more details.
-
-;; You should have received a copy of the Lesser GNU General Public License
-;; along with veritas.el.  If not, see <https://www.gnu.org/licenses/>.
+;;; SPDX-License-Identifier: MIT
 
 (define-module (maak)
   #:declarative? #t
@@ -24,26 +13,26 @@
   ;; container-build' -- and a task may not shadow the helper it calls.
   #:use-module ((maak container) #:prefix ct:))
 
-;; ====== Maak constants ======
+;;; ====== Maak constants ======
 
-;; The Emacs the package is compiled and tested with, overridable with the
-;; EMACS environment variable, exactly as one would expect.
+;;; The Emacs the package is compiled and tested with, overridable with the
+;;; EMACS environment variable, exactly as one would expect.
 (define emacs-command
   (or (getenv "EMACS") "emacs"))
 
-;; The package itself.
+;;; The package itself.
 (define source-file
   "veritas.el")
 
-;; The ERT suite.
+;;; The ERT suite.
 (define test-file
   "test/veritas-test.el")
 
-;; What byte-compilation leaves behind.
+;;; What byte-compilation leaves behind.
 (define compiled-files
   '("veritas.elc" "test/veritas-test.elc"))
 
-;; ====== Maak tasks ======
+;;; ====== Maak tasks ======
 
 (define (compile)
   "Byte-compile the package."
@@ -97,16 +86,16 @@
   "List the available tasks."
   (list-tasks))
 
-;; ====== Agent skills ======
+;;; ====== Agent skills ======
 
-;; AGENTS.md is generated, never edited by hand.  The section has two halves:
-;; the data below, which is this project's, and the task itself, which is not.
-;; Another repository copies the whole section and replaces the data - the
-;; header, the pinned skills (repository, commit, path, licence) and the
-;; practices - and `maak agents' writes its own AGENTS.md.  Regeneration is
-;; deterministic: the same pins and the same text produce the same file, byte
-;; for byte, and it needs nothing but curl.  The skill URLs assume GitHub, so a
-;; skill hosted elsewhere needs a URL of its own.
+;;; AGENTS.md is generated, never edited by hand.  The section has two halves:
+;;; the data below, which is this project's, and the task itself, which is not.
+;;; Another repository copies the whole section and replaces the data - the
+;;; header, the pinned skills (repository, commit, path, licence) and the
+;;; practices - and `maak agents' writes its own AGENTS.md.  Regeneration is
+;;; deterministic: the same pins and the same text produce the same file, byte
+;;; for byte, and it needs nothing but curl.  The skill URLs assume GitHub, so a
+;;; skill hosted elsewhere needs a URL of its own.
 
 (define ponytail-commit
   "96608e078b2d5ea607c5c3b8b5a54d1c1fba6846")
@@ -114,9 +103,9 @@
 (define tdd-commit
   "22f0b463e7a5e579904dd6211a520321035526f7")
 
-;; Name, repository, commit, the path the repository keeps the skill at and the
-;; licence.  A skill arrives whole: trimming it means scanning for headings, and
-;; such a scan cannot tell a heading from a `##' line inside a code fence.
+;;; Name, repository, commit, the path the repository keeps the skill at and the
+;;; licence.  A skill arrives whole: trimming it means scanning for headings, and
+;;; such a scan cannot tell a heading from a `##' line inside a code fence.
 (define agent-skills
   (list (list "ponytail"
               "DietrichGebert/ponytail"
@@ -141,9 +130,9 @@ input, so regenerating gives the same document.  The repository's own rules win
 over general advice, and the narrowest rule here wins over the broadest.
 ")
 
-;; Practices this project keeps.  They are short on purpose: a rule a reader
-;; checks in a second is a rule that gets followed.  The pinned skills are the
-;; long form of the same habits.
+;;; Practices this project keeps.  They are short on purpose: a rule a reader
+;;; checks in a second is a rule that gets followed.  The pinned skills are the
+;;; long form of the same habits.
 (define agent-practices
   (list
    "## Documentation
@@ -273,13 +262,13 @@ over general advice, and the narrowest rule here wins over the broadest.
 (define (slurp path)
   "Return the whole of @var{path} as a string."
   (call-with-input-file path
-    (lambda (port)
-      (let loop ((lines '())
-                 (line (read-line port)))
-        (if (eof-object? line)
-            (string-concatenate-reverse lines)
-            (loop (cons (string-append line "\n") lines)
-                  (read-line port)))))))
+                        (lambda (port)
+                          (let loop ((lines '())
+                                     (line (read-line port)))
+                            (if (eof-object? line)
+                              (string-concatenate-reverse lines)
+                              (loop (cons (string-append line "\n") lines)
+                                    (read-line port)))))))
 
 (define (fetch-skill name repository commit path)
   "Download one skill pinned at @var{commit}, into the reports tree.
@@ -306,23 +295,23 @@ over general advice, and the narrowest rule here wins over the broadest.
                                                   (list-ref skill 3)))))
                      agent-skills)))
     (call-with-output-file "AGENTS.md"
-      (lambda (port)
-        (display agents-header port)
-        (for-each (lambda (skill)
-                    (format port
-                            "~%## ~a~%~%`~a` at `~a`, `~a`, ~a licensed.~%~%"
-                            (list-ref skill 0)
-                            (list-ref skill 1)
-                            (list-ref skill 2)
-                            (list-ref skill 3)
-                            (list-ref skill 4))
-                    (display (list-ref skill 5) port))
-                  skills)
-        (for-each (lambda (practice)
-                    (newline port)
-                    (display practice port))
-                  agent-practices)))))
-;; ====== Container tasks ======
+                           (lambda (port)
+                             (display agents-header port)
+                             (for-each (lambda (skill)
+                                         (format port
+                                                 "~%## ~a~%~%`~a` at `~a`, `~a`, ~a licensed.~%~%"
+                                                 (list-ref skill 0)
+                                                 (list-ref skill 1)
+                                                 (list-ref skill 2)
+                                                 (list-ref skill 3)
+                                                 (list-ref skill 4))
+                                         (display (list-ref skill 5) port))
+                                       skills)
+                             (for-each (lambda (practice)
+                                         (newline port)
+                                         (display practice port))
+                                       agent-practices)))))
+;;; ====== Container tasks ======
 
 (define (container-build)
   "Build the container image for veritas-el."
@@ -338,6 +327,6 @@ over general advice, and the narrowest rule here wins over the broadest.
   "Build the container image for veritas-el."
   (container-build))
 
-;; Local Variables:
-;; mode: scheme
-;; End:
+;;; Local Variables:
+;;; mode: scheme
+;;; End:
